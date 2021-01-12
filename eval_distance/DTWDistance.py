@@ -24,3 +24,6 @@ def DTWDistance(ts1, ts2, w=10):
                                               DTWdistances[(i - 1, j - 1)])
 
     return math.sqrt(DTWdistances[len(ts1) - 1, len(ts2) - 1])
+
+
+

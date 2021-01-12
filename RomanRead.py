@@ -1,12 +1,14 @@
 import os
-
 import pandas as pd
 from sklearn.metrics import classification_report
-
 import ReadOIFITS as oifits
 from data_visulization import standardPlot
 from eval_distance import *
 from file_preprocessing import *
+from Barycenters_avarage import euclidian_barycenter
+from tslearn.clustering import TimeSeriesKMeans
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Specifying the location of the data file
 dir = '/Users/rmanchur/Documents/MAI_Project/data/'
@@ -32,6 +34,7 @@ class Celestial:
 
     def getType(self):
         return self.name.split('_')[0]
+
 
 
 def knn(train, test, w):
@@ -84,13 +87,15 @@ for each_file in os.listdir(fitsdir):
 
     # Now you can play with the data!
     cel_object = each_file.split('.')[0]
-
     sq_visibilities[cel_object] = pd.DataFrame({'base': base, 'V2': V2, 'V2err': V2e, 'waveV2': waveV2})
-
     closure_phase[cel_object] = pd.DataFrame({'Bmax': Bmax,
                                               'CP': CP})
 
-# traintest = []
+
+
+
+
+traintest = []
 for k, v in sq_visibilities.items():
     print('Processing file:.....', k)
     quantized_ds = quantize_ds(v, intervals=50)  # quantize dataset along x-axis
@@ -132,6 +137,35 @@ for k, v in sq_visibilities.items():
 # print(knn(train,test,3))
 #
 #
+
+
+
+DTWDistance([1,2,3,4,5],[6,7,8,9,0],2)
+print(euclidian_barycenter([[1,2,3],[2,3,4]]))
+
+seed = 1234
+dba_model = TimeSeriesKMeans(n_clusters=2,n_init=2, metric="dtw",max_iter_barycenter=10,verbose=True,random_state=seed)
+TS = [[1,1,2,2,1,1],[1,2,2,1,1,1],[2,1,2,1,2,1],[1,2,1,2,1,2]]
+TS = np.array(TS)
+dba_predict = dba_model.fit_predict(TS)
+sz = 2
+for yi in range(2):
+    plt.subplot(3, 3, 4 + yi)
+    for xx in TS[dba_predict == yi]:
+        plt.plot(xx.ravel(), "k-", alpha=.2)
+    plt.plot(dba_model.cluster_centers_[yi].ravel(), "r-")
+    # plt.xlim(0, sz)
+    # plt.ylim(-4, 4)
+    plt.text(0.55, 0.85,'Cluster %d' % (yi + 1),
+             transform=plt.gca().transAxes)
+    if yi == 1:
+        plt.title("DBA $k$-means")
+
+plt.tight_layout()
+plt.show()
+
+
+
 
 
 # moving files

@@ -1,5 +1,5 @@
 import fnmatch
-
+import os
 import astropy.io.fits as fits
 from pylab import *
 from scipy import signal
