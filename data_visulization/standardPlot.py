@@ -42,6 +42,7 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
     f = plt.gcf()
     f.set_size_inches(8, 10)
     plt.savefig(dst_folder + plot_type + cname + ".pdf", dpi=100)  # save data from current block
+    plt.close()
 
 # def standardPlot(data, threshold = 1):
 #     '''
