@@ -53,12 +53,13 @@ class Celestial:
         self.data = data
         self.post_processing_data = post_processing_data
 
+
     def getType(self):
         return self.name.split("_")[0]
 
 
 
-def data_processing(name, datatype, measurements,visulalize=False):
+def data_processing(name, datatype, measurements, visulalize=False, threshold=1):
     """
     :param name <str>
         name of object currently processed
@@ -75,6 +76,8 @@ def data_processing(name, datatype, measurements,visulalize=False):
 
     #re-arrange the data to PandasDataframe format from input dictionary
     measurements_ = pd.DataFrame.from_dict(measurements)
+    columns = measurements_.columns.to_list()
+    x = columns[0]
 
     print("Processing file {0}, datatype {1}:.....".format(name,datatype))
     quantized_ds = quantize_ds(measurements_, intervals=50)  # quantize dataset along x-axis
@@ -82,12 +85,12 @@ def data_processing(name, datatype, measurements,visulalize=False):
                                  method="minmax")  # normalize dataset using min-max normalization  - [0..1]"
     z = data_supression(normalized_ds,
                         method="median")  # compress data point in each bucket using mean or median compression
-    z.sort_values(by="base", inplace=True)  # sort and replace
+    z.sort_values(by=x, inplace=True)  # sort and replace
     z.interpolate(method="linear", axis=0, direction="forward", inplace=True)
 
     # Data vizualization after pre-processing
     if visulalize:
-        standardPlot.plotData(raw_data=(name, measurements_, 1),
+        standardPlot.plotData(raw_data=(name, measurements_, threshold),
                               quantized=quantized_ds,
                               normalized=normalized_ds,
                               interpolated=z,
@@ -100,7 +103,7 @@ def data_processing(name, datatype, measurements,visulalize=False):
     return z_dict
 
 
-def DBA_model(samples,num_clusters,dst_folder, data_type):
+def DBA_model(samples,samples_names,num_clusters,dst_folder, data_type):
     """
     Builds DBA clustering model based on input data, prints data points associated with cluster and plots data and avg sequence
     :return: <numpy.array> center sequences
@@ -129,6 +132,27 @@ def DBA_model(samples,num_clusters,dst_folder, data_type):
 
     return dba_model.cluster_centers_
 
+
+
+def create_clusters(data_set, num_clusters=12, model_type='V2'):
+    d1, d2 = len(data_set), len(data_set[0].post_processing_data[model_type][model_type])
+    samples = np.zeros((d1, d2))
+    samples_names = []
+    for idx, cel_object in enumerate(data_set):
+        samples[idx] = cel_object.post_processing_data[model_type][model_type]
+        samples_names.append(cel_object.name)
+    cluster_centers = DBA_model(samples,samples_names,num_clusters=num_clusters, dst_folder=pdfdir, data_type=model_type)
+
+    # calculate distance to cluster center from each object, e.i: certanity rate
+    d2 = cluster_centers.shape[0]
+    distance_to_centers_ = np.array(np.ones((d1, d2)) * np.inf)
+    distance_to_centers = pd.DataFrame(distance_to_centers_, index=samples_names,
+                                       columns=[x for x in range(num_clusters)])
+    for i, cel_object in enumerate(data_set):
+        for j, cluster in enumerate(cluster_centers):
+            distance_to_centers.iloc[i, j] = DTWDistance(cel_object.post_processing_data[model_type][model_type],
+                                                         cluster)
+    distance_to_centers.to_csv(csvdir + model_type + '_distances.csv')
 
 
 # cleaning up
@@ -173,9 +197,12 @@ for each_file in os.listdir(fitsdir):
 
     #get V2 and do processing for those
     V2_data = {"base": base, "V2": V2, "V2err": V2e, "waveV2": waveV2}
-    V2_data_processed = data_processing(cel_object_name,"V2",V2_data,visulalize=False)
+    CP_data = {"Bmax": Bmax, "CP": CP, "CPerr": CPe, "waveCP": waveCP}
+    V2_data_processed = data_processing(cel_object_name,"V2",V2_data,visulalize=True,threshold=1)
+    CP_data_processed = data_processing(cel_object_name,"CP", CP_data, visulalize=True,threshold=180)
     current_object = Celestial(cel_object_name,V2_data,
-                               post_processing_data=V2_data_processed)
+                               post_processing_data={"V2":V2_data_processed,
+                                                     "CP": CP_data_processed})
 
     #build full dataset
     data_set.append(current_object)
@@ -183,23 +210,12 @@ for each_file in os.listdir(fitsdir):
 ################
 ####V2 model####
 ################
-d1, d2 = len(data_set), len(data_set[0].post_processing_data['V2'])
-num_clusters = 12
-samples = np.zeros((d1,d2))
-samples_names = []
-for idx, cel_object in enumerate(data_set):
-    samples[idx] = cel_object.post_processing_data['V2']
-    samples_names.append(cel_object.name)
-cluster_centers = DBA_model(samples,num_clusters=num_clusters,dst_folder=pdfdir,data_type='V2')
+create_clusters(data_set,num_clusters=12,model_type='V2')
 
-#calculate distance to cluster center from each object, e.i: certanity rate
-d2 = cluster_centers.shape[0]
-distance_to_centers_ = np.array(np.ones((d1,d2))*np.inf)
-distance_to_centers = pd.DataFrame(distance_to_centers_,index=samples_names,columns=[x for x in range(num_clusters)])
-for i,cel_object in enumerate(data_set):
-    for j,cluster in enumerate(cluster_centers):
-        distance_to_centers.iloc[i,j] = DTWDistance(cel_object.post_processing_data['V2'],cluster)
-distance_to_centers.to_csv(csvdir+'V2_distances.csv')
+################
+####CP model####
+################
+create_clusters(data_set,num_clusters=12,model_type='CP')
 
 
 # random.shuffle(traintest)
