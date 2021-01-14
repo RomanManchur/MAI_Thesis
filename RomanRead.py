@@ -12,10 +12,10 @@ import numpy as np
 
 # Specifying the location of the data file
 dir = "/Users/rmanchur/Documents/MAI_Thesis/data/"
-fitsdir = dir + "all_data/all_sets/"
+# fitsdir = dir + "all_data/all_sets/"
 # fitsdir = dir + "all_data/2stars/"
 # fitsdir = dir + "all_data/StellarSurface/"
-# fitsdir = dir + "all_data/Single/"
+fitsdir = dir + "all_data/Single/"
 pdfdir = dir + "pdf/"
 csvdir = dir + "csv/"
 data_set = []
@@ -103,7 +103,7 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1)
     return z_dict
 
 
-def DBA_model(samples,samples_names,num_clusters,dst_folder, data_type):
+def DBA_model(samples,num_clusters,dst_folder, data_type):
     """
     Builds DBA clustering model based on input data, prints data points associated with cluster and plots data and avg sequence
     :return: <numpy.array> center sequences
@@ -132,27 +132,6 @@ def DBA_model(samples,samples_names,num_clusters,dst_folder, data_type):
 
     return dba_model.cluster_centers_
 
-
-
-def create_clusters(data_set, num_clusters=12, model_type='V2'):
-    d1, d2 = len(data_set), len(data_set[0].post_processing_data[model_type][model_type])
-    samples = np.zeros((d1, d2))
-    samples_names = []
-    for idx, cel_object in enumerate(data_set):
-        samples[idx] = cel_object.post_processing_data[model_type][model_type]
-        samples_names.append(cel_object.name)
-    cluster_centers = DBA_model(samples,samples_names,num_clusters=num_clusters, dst_folder=pdfdir, data_type=model_type)
-
-    # calculate distance to cluster center from each object, e.i: certanity rate
-    d2 = cluster_centers.shape[0]
-    distance_to_centers_ = np.array(np.ones((d1, d2)) * np.inf)
-    distance_to_centers = pd.DataFrame(distance_to_centers_, index=samples_names,
-                                       columns=[x for x in range(num_clusters)])
-    for i, cel_object in enumerate(data_set):
-        for j, cluster in enumerate(cluster_centers):
-            distance_to_centers.iloc[i, j] = DTWDistance(cel_object.post_processing_data[model_type][model_type],
-                                                         cluster)
-    distance_to_centers.to_csv(csvdir + model_type + '_distances.csv')
 
 
 # cleaning up
@@ -210,12 +189,23 @@ for each_file in os.listdir(fitsdir):
 ################
 ####V2 model####
 ################
-create_clusters(data_set,num_clusters=12,model_type='V2')
+d1, d2 = len(data_set), len(data_set[0].post_processing_data['V2']['V2'])
+num_clusters = 12
+samples = np.zeros((d1,d2))
+samples_names = []
+for idx, cel_object in enumerate(data_set):
+    samples[idx] = cel_object.post_processing_data['V2']['V2']
+    samples_names.append(cel_object.name)
+cluster_centers = DBA_model(samples,num_clusters=num_clusters,dst_folder=pdfdir,data_type='V2')
 
-################
-####CP model####
-################
-create_clusters(data_set,num_clusters=12,model_type='CP')
+#calculate distance to cluster center from each object, e.i: certanity rate
+d2 = cluster_centers.shape[0]
+distance_to_centers_ = np.array(np.ones((d1,d2))*np.inf)
+distance_to_centers = pd.DataFrame(distance_to_centers_,index=samples_names,columns=[x for x in range(num_clusters)])
+for i,cel_object in enumerate(data_set):
+    for j,cluster in enumerate(cluster_centers):
+        distance_to_centers.iloc[i,j] = DTWDistance(cel_object.post_processing_data['V2']['V2'],cluster)
+distance_to_centers.to_csv(csvdir+'V2_distances.csv')
 
 
 # random.shuffle(traintest)
