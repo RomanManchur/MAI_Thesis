@@ -1,4 +1,6 @@
 import os
+import random
+
 import pandas as pd
 from sklearn.metrics import classification_report
 import ReadOIFITS as oifits
@@ -9,6 +11,8 @@ from Barycenters_avarage import euclidian_barycenter
 from tslearn.clustering import TimeSeriesKMeans
 import matplotlib.pyplot as plt
 import numpy as np
+from collections import defaultdict
+
 
 # Specifying the location of the data file
 dir = "/Users/rmanchur/Documents/MAI_Thesis/data/"
@@ -20,21 +24,43 @@ pdfdir = dir + "pdf/"
 csvdir = dir + "csv/"
 data_set = []
 
+#Those parameters control if knn will be run on  files directly
+def default_value():
+    return []
 
-def knn(train, test, w):
-    preds, ground_truth = [], []
-    for ind, i in enumerate(test):
-        min_dist = float("inf")
-        closest_n, closest_seq = "", []
-        for j in train:
-            dist = DTWDistance(i.V2, j.V2, w)
-            if dist < min_dist:
-                min_dist = dist
-                closest_n = j.getType()
-        preds.append(closest_n)
-        ground_truth.append(i.getType())
+def get_type_name(fname):
+    separator_index = fname.index("_")
+    file_type = fname[:separator_index]
+    file_name = fname[separator_index+1:]
+    return (file_type, fname)
 
-    return classification_report(ground_truth, preds)
+knn_on_files = False
+file_names = defaultdict(default_value)
+
+
+def get_nn(query, train_ds, w, n_count=1):
+    """
+    Returns dict-like object of closest neighbors and their distance
+    :param query <array-like>
+        any query sequence that need to be classified
+    :param train_ds <array-like>
+        key: object_name for which labels are known, values: sequence representing the object
+    :param w <int>
+        window size that is used in DTW metric calculation
+    :param n_count <int>
+        defines how many neighbors to hold in response
+    """
+    min_dist = np.ones(n_count)*np.inf
+    closest_n = [""]*n_count
+    result = pd.DataFrame({"Closest Neighbor": closest_n, "Distance":min_dist})
+    for train_name, train_seq in train_ds.items():
+        current_distance = DTWDistance(query,train_seq,w)
+        if (current_distance < result['Distance']).any():
+            result.loc[0] = [train_name, current_distance]
+            result.sort_values(by="Distance", ascending=False,inplace=True, ignore_index=True)
+            # finally sort in ascending order as we will need to check for object with min distance while evaluating model
+    result.sort_values(by="Distance", ascending=True, inplace=True, ignore_index=True)
+    return result
 
 
 class Celestial:
@@ -152,11 +178,15 @@ def make_clusters(data_set, data_type="V2", num_clusters=12):
             distance_to_centers.iloc[i, j] = DTWDistance(cel_object.post_processing_data[data_type][data_type], cluster)
     distance_to_centers.to_csv(csvdir + data_type + '_distances.csv')
 
+    return cluster_centers
+
 
 # cleaning up
 for pdf in os.listdir(fitsdir):
     if pdf.endswith("pdf"):
         os.remove(fitsdir + "/" + pdf)
+
+
 
 
 # processing data
@@ -190,6 +220,11 @@ for each_file in os.listdir(fitsdir):
     #################################################
     ####### Now you can play with the data!##########
     #################################################
+    knn_on_files = True
+    if knn_on_files:
+        object_type, object_name = get_type_name(each_file)
+        file_names[object_type].append(object_name.split('.')[0])
+
     #get object name
     cel_object_name = each_file.split(".")[0]
 
@@ -205,45 +240,68 @@ for each_file in os.listdir(fitsdir):
     #build full dataset
     data_set.append(current_object)
 
-################
-####V2 model####
-################
-# make_clusters(data_set, data_type="V2", num_clusters=12)
 
-################
-####CP model####
-################
-# make_clusters(data_set, data_type="CP", num_clusters=12)
+###############
+###V2 model####
+###############
+V2_cluster_centers = make_clusters(data_set, data_type="V2", num_clusters=12)
+
+###############
+###CP model####
+###############
+CP_cluster_centers = make_clusters(data_set, data_type="CP", num_clusters=12)
 
 
 
+####################
+####KNN on files####
+####################
+print("=====================================================\n")
+print("=================<KNN classification> ===============\n")
+print("=====================================================\n")
+#control check if file_names dictionary contains data, that will be in case knn on files is set to True
+if len(file_names)>0:
+    train_ref, test_ref = [], []
+    for k, v in file_names.items():
+        random.shuffle(v)
+        #perfrom 80/20 split
+        index = len(v) * 80 // 100
+        train_ref.extend(v[:index])
+        test_ref.extend(v[index:])
 
-# random.shuffle(traintest)
-# train = traintest[0:int(len(traintest)*0.8)]
-# test = traintest[int(len(traintest)*0.8):]
-#
-# train_samples = [i.name for i in train]
-# test_samples = [ i.name for i in test]
-# #calculate distance between each test example and each train example
-# for i in test:
-#     for j in train:
-#         w = DTWDistance(i.V2, j.V2)
-#         print("Distance metric between: ", i.name, j.name, "is: ", w)
-#
-# print("Train samples:\t" + str(train_samples) + "\n" + "Test samples:\t" + str(test_samples))
-# print(knn(train,test,3))
-#
-#
+#make train and test datasets
+train_ds, test_ds = {}, {}
+for cel_object in data_set:
+    if cel_object.name in train_ref:
+        train_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
+    else:
+        test_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
+
+#test model accuracy
+preds, ground_truth = [], []
+for cel_object, query in test_ds.items():
+    n_closest = get_nn(query,train_ds,w=5,n_count=3)
+    first_closest =n_closest.loc[0]['Closest Neighbor'] #get 1st closest neighbor
+    first_closest_type,_ = get_type_name(first_closest)
+    true_type,cel_object_name = get_type_name(cel_object)
+    if first_closest_type != true_type:
+        print("===================================================")
+        print("Classification mismatch for {0}: predicted {1}, actual {2}".format(cel_object_name,first_closest_type,true_type))
+        print("===================================================")
+        print("Other possible neighbors and distances\n", n_closest)
+
+    preds.append(first_closest_type)
+    ground_truth.append(true_type)
+
+print("=================<Model Accuracy (query on samples)> ===============\n")
+print(classification_report(ground_truth,preds,zero_division=0))
+
 
 
 # for i in range(len(samples)-1):
 #     for j in range(i,len(samples)):
 #         print(DTWDistance(samples[i],samples[j]))
 #         print(euclidian_barycenter(samples))
-
-
-
-
 
 
 # moving files
