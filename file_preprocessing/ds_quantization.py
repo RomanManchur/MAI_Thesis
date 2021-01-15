@@ -29,7 +29,7 @@ def quantize_ds(panda_ds, intervals=100):
 
     # some bins will have no data, hence need to append those with NaN
     j, missing_x, missing_y = min_value, [], []
-    control = sorted(set(quant))
+    # control = sorted(set(quant))
     while j <= max_value:
         if not len(quant_ds[(quant_ds.iloc[:, 0] >= j) & (quant_ds.iloc[:, 0] < j + interval_width)]):
             missing_x.append(j)
@@ -37,8 +37,8 @@ def quantize_ds(panda_ds, intervals=100):
         j = interval_width + j
     z = pd.DataFrame({col_names[0]: missing_x, col_names[1]: missing_y})
     quant_ds = quant_ds.append(z, ignore_index=True)
-    print(len(set(quant_ds[col_names[0]])))
-    print(sorted(quant_ds[col_names[0]]))
+    # print(len(set(quant_ds[col_names[0]])))
+    # print(sorted(quant_ds[col_names[0]]))
 
     # insert well known value at zero
     if col_names[0] == 'base':
