@@ -7,11 +7,11 @@ import ReadOIFITS as oifits
 from data_visulization import standardPlot
 from eval_distance import *
 from file_preprocessing import *
-from Barycenters_avarage import euclidian_barycenter
 from tslearn.clustering import TimeSeriesKMeans
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
+import re
 
 
 # Specifying the location of the data file
@@ -22,18 +22,50 @@ fitsdir = dir + "all_data/all_sets/"
 # fitsdir = dir + "all_data/Single/"
 pdfdir = dir + "pdf/"
 csvdir = dir + "csv/"
-data_set = []
+data_set_as_dict = {}
+
+
+def get_object_name(object_name_):
+    """Takes celestial object name as input and removes measurement index if one is present; returns object name
+    :param object_name <str>
+        supported types are:
+            objectName_measurementsNumber'  or 'objectName'
+    """
+    if re.search(r'([\w_]+)_\d+$', object_name_):
+        object_name = re.search(r'([\w_]+)_\d+$', object_name_).group(1)
+    else:
+        object_name = object_name_
+    return object_name
+
+
+def get_type_name(fname,type_included = False):
+    """"Returns tupple of (file_type, file_name) if file type encoded in filename, otherwise returns filename
+    :param fname <str>
+        file name of FITS file processed;
+        Standardized values are:
+            'objectType_objectName_measurementsNumber' or
+            'objectName_measurementsNumber'  or
+            'objectName'
+    :param type_included <boolean>
+        defines if file name has type of celestial object encoded, e.i: well known object types
+    """
+    if type_included:
+        type_end_index = fname.index("_")
+        name_end_index = fname.index(".", )
+        object_type = fname[:type_end_index]
+        object_name_ = fname[type_end_index+1:name_end_index]  # storing filename to temp variable, as it may include measure index
+        object_name = get_object_name(object_name_)
+        return (object_type, object_name)
+    else:
+        name_end_index = fname.index(".")
+        object_name_ = fname[:name_end_index]#storing filename to temp variable, as it may include measure index
+        object_name = get_object_name(object_name_)
+        return (object_name)
+
 
 #Those parameters control if knn will be run on  files directly
 def default_value():
-    return []
-
-def get_type_name(fname):
-    separator_index = fname.index("_")
-    file_type = fname[:separator_index]
-    file_name = fname[separator_index+1:]
-    return (file_type, fname)
-
+    return set()
 knn_on_files = False
 file_names = defaultdict(default_value)
 
@@ -65,28 +97,39 @@ def get_nn(query, train_ds, w, n_count=1):
 
 class Celestial:
     """Generic conteiner to store object information"""
-    def __init__(self, name, data,post_processing_data):
+    def __init__(self, name, data,post_processing_data={}):
         """
         Create instance of class
         :param type: <str>
             description of object type
-        :param data <dict>
-            keys reprsent value type (V2, CP, uv, etc) and values are actual measurements in numpy.array
-        :param post_processing_data <dict>
-            keys reprsent value type (V2, CP, uv, etc) and values are actual measurements in numpy.array
+        :param data <nested dict>
+            keys: represent value type (V2, CP, uv, etc) and values in inner dictionary with
+            keys: equal to measurements type and values are actual measurements for the parameter
+        :param post_processing_data <nested dict>
+            keys: represent value type (V2, CP, uv, etc) and values in inner dictionary with
+            keys: equal to measurements type and values are actual measurements for the parameter after data processing
         """
         self.name = name
         self.data = data
         self.post_processing_data = post_processing_data
 
-
-    def getType(self):
-        return self.name.split("_")[0]
+    def update_data(self,new_data):
+        """"Combines measurements taken for the same object in different days to single dataset
+        :param: new_data <nested dict>
+            data that needs to be appended to data already associated with object
+            keys: represent value type (V2, CP, uv, etc) and values in inner dictionary with
+            keys: equal to measurements type and values are actual measurements for the parameter
+        :returns None
+        """
+        for outer_key,inner_dict in new_data.items():
+            for inner_key, inner_value in inner_dict.items():
+                self.data[outer_key][inner_key] = np.append(self.data[outer_key][inner_key],new_data[outer_key][inner_key])
+        return None
 
 
 
 def data_processing(name, datatype, measurements, visulalize=False, threshold=1):
-    """
+    """ Perform data pre-processing (and visualization optional); Returns dictionary with processed data
     :param name <str>
         name of object currently processed
     :param datatype <str>
@@ -95,9 +138,11 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1)
         keys: name of parameter, values: measurements taken for parameter (e.i: "V2": <array>)
     :param: visulalize <boolean>
         defines if data processig is plotted or not (default = False / non-plotted)
+
+
     :return: <dict>
-    data after quantization, normalization, compression and interpolation
-    keys: data type; values - numpy.array
+        data after quantization, normalization, compression and interpolation
+        keys: data type; values - numpy.array
     """
 
     #re-arrange the data to PandasDataframe format from input dictionary
@@ -131,7 +176,9 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1)
 
 def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
     """
-    Builds DBA clustering model based on input data, prints data points associated with cluster and plots data and avg sequence
+    Builds DBA clustering model based on input data, prints data points associated with cluster
+    and plots data and avg sequence
+
     :return: <numpy.array> center sequences
     """
     seed = 1234
@@ -141,7 +188,7 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
         plt.subplot(num_clusters, 1, 1 + cluster_id)
         #get indexes of rows associated with current cluster in dataset
         object_incluster_indexes = np.argwhere(dba_predict == cluster_id).ravel()
-        print("============Cluster#{0}=============".format(cluster_id))
+        print("============Cluster#{0}=============".format(cluster_id+1))
         for each_object in object_incluster_indexes:
             print("--> associated object: {0}".format(samples_names[each_object]))#print name of celestial object associated with cluster
         #plot clusters and data
@@ -159,11 +206,12 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
     return dba_model.cluster_centers_
 
 
-def make_clusters(data_set, data_type="V2", num_clusters=12):
-    d1, d2 = len(data_set), len(data_set[0].post_processing_data[data_type][data_type])
-    samples = np.zeros((d1, d2))
-    samples_names = []
-    for idx, cel_object in enumerate(data_set):
+def make_clusters(data_set_as_dict, data_type="V2", num_clusters=12):
+    celestial_object_data = list(data_set_as_dict.values())
+    d1, d2 = len(data_set_as_dict), len(celestial_object_data[0].post_processing_data[data_type][data_type])
+    samples = np.zeros((d1, d2))#building data matrix used in clustering decision
+    samples_names = []#building associative list with celestial object names (that is to address fact that list are non-ordered)
+    for idx, cel_object in enumerate(celestial_object_data):
         samples[idx] = cel_object.post_processing_data[data_type][data_type]
         samples_names.append(cel_object.name)
     cluster_centers = DBA_model(samples, samples_names, num_clusters=num_clusters, dst_folder=pdfdir, data_type=data_type)
@@ -173,7 +221,7 @@ def make_clusters(data_set, data_type="V2", num_clusters=12):
     distance_to_centers_ = np.array(np.ones((d1, d2)) * np.inf)
     distance_to_centers = pd.DataFrame(distance_to_centers_, index=samples_names,
                                        columns=[x for x in range(num_clusters)])
-    for i, cel_object in enumerate(data_set):
+    for i, cel_object in enumerate(data_set_as_dict.values()):
         for j, cluster in enumerate(cluster_centers):
             distance_to_centers.iloc[i, j] = DTWDistance(cel_object.post_processing_data[data_type][data_type], cluster)
     distance_to_centers.to_csv(csvdir + data_type + '_distances.csv')
@@ -186,7 +234,8 @@ for pdf in os.listdir(fitsdir):
     if pdf.endswith("pdf"):
         os.remove(fitsdir + "/" + pdf)
 
-
+# for each_file in os.listdir(fitsdir):
+#     print(get_type_name(each_file,False))
 
 
 # processing data
@@ -220,89 +269,107 @@ for each_file in os.listdir(fitsdir):
     #################################################
     ####### Now you can play with the data!##########
     #################################################
+
+
     knn_on_files = True
-    if knn_on_files:
-        object_type, object_name = get_type_name(each_file)
-        file_names[object_type].append(object_name.split('.')[0])
+    object_type_name = get_type_name(each_file,True)
+    #track association between known object types and their names; used later in prediction and accuracy check
+    if knn_on_files and len(object_type_name) == 2:
+        object_type, object_name = object_type_name
+        file_names[object_type].add(object_name)
+    else:
+        # in case no labels are known or KNN is not applied we still need to get object names
+        # to combine data from multiple measurements on same object and clustering
+        object_name = object_type_name[0]
 
-    #get object name
-    cel_object_name = each_file.split(".")[0]
-
-    #get V2 and do processing for those
+    #Read data and store to dictionary for easy access
+    #get V2 and CP measurements
     V2_data = {"base": base, "V2": V2, "V2err": V2e, "waveV2": waveV2}
     CP_data = {"Bmax": Bmax, "CP": CP, "CPerr": CPe, "waveCP": waveCP}
-    V2_data_processed = data_processing(cel_object_name,"V2",V2_data,visulalize=False,threshold=1)
-    CP_data_processed = data_processing(cel_object_name,"CP", CP_data, visulalize=False,threshold=180)
-    current_object = Celestial(cel_object_name,V2_data,
-                               post_processing_data={"V2":V2_data_processed,
-                                                     "CP": CP_data_processed})
 
-    #build full dataset
-    data_set.append(current_object)
+    #if there was some data already processed for current object - update data in dictionary
+    if object_name in data_set_as_dict.keys():
+        data_set_as_dict[object_name].update_data({"V2":V2_data, "CP": CP_data})
+        c=0
+    #if it's first time data for the celestial object is processed, initialize object and add it to dictionary
+    else:
+        current_object = Celestial(object_name, {"V2":V2_data, "CP": CP_data})
+        data_set_as_dict[object_name] = current_object
+        c = 0
+
+#At this point all data is read from FITS files and stored to 'data_set_as_dict', each key represent object name and
+#associated value is object of class 'Celestial'
+
+#Run pre-processing on data
+data_set = []
+for object_name, celestial_object in data_set_as_dict.items():
+    V2_data_processed = data_processing(object_name,"V2", celestial_object.data["V2"], visulalize=True, threshold=1)
+    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180)
+    celestial_object.post_processing_data = {"V2":V2_data_processed, "CP": CP_data_processed}
 
 
 ###############
 ###V2 model####
 ###############
-V2_cluster_centers = make_clusters(data_set, data_type="V2", num_clusters=12)
+V2_cluster_centers = make_clusters(data_set_as_dict, data_type="V2", num_clusters=7)
 
 ###############
 ###CP model####
 ###############
-CP_cluster_centers = make_clusters(data_set, data_type="CP", num_clusters=12)
+CP_cluster_centers = make_clusters(data_set_as_dict, data_type="CP", num_clusters=7)
 
 
 
 ####################
 ####KNN on files####
 ####################
-print("=====================================================\n")
-print("=================<KNN classification> ===============\n")
-print("=====================================================\n")
-#control check if file_names dictionary contains data, that will be in case knn on files is set to True
-if len(file_names)>0:
-    train_ref, test_ref = [], []
-    for k, v in file_names.items():
-        random.shuffle(v)
-        #perfrom 80/20 split
-        index = len(v) * 80 // 100
-        train_ref.extend(v[:index])
-        test_ref.extend(v[index:])
+# print("=====================================================\n")
+# print("=================<KNN classification> ===============\n")
+# print("=====================================================\n")
+# #control check if file_names dictionary contains data, that will be in case knn on files is set to True
+# if len(file_names)>0:
+#     train_ref, test_ref = [], []
+#     for k, v in file_names.items():
+#         random.shuffle(v)
+#         #perfrom 80/20 split
+#         index = len(v) * 80 // 100
+#         train_ref.extend(v[:index])
+#         test_ref.extend(v[index:])
+#
+# #make train and test datasets
+# train_ds, test_ds = {}, {}
+# for cel_object in data_set:
+#     if cel_object.name in train_ref:
+#         train_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
+#     else:
+#         test_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
+#
+# #test model accuracy
+# preds, ground_truth = [], []
+# for cel_object, query in test_ds.items():
+#     n_closest = get_nn(query,train_ds,w=5,n_count=3)
+#     first_closest =n_closest.loc[0]['Closest Neighbor'] #get 1st closest neighbor
+#     first_closest_type,_ = get_type_name(first_closest)
+#     true_type,cel_object_name = get_type_name(cel_object)
+#     if first_closest_type != true_type:
+#         print("===================================================")
+#         print("Classification mismatch for {0}: predicted {1}, actual {2}".format(cel_object_name,first_closest_type,true_type))
+#         print("===================================================")
+#         print("Other possible neighbors and distances\n", n_closest)
+#
+#     preds.append(first_closest_type)
+#     ground_truth.append(true_type)
+#
+# print("=================<Model Accuracy (query on samples)> ===============\n")
+# print(classification_report(ground_truth,preds,zero_division=0))
 
-#make train and test datasets
-train_ds, test_ds = {}, {}
-for cel_object in data_set:
-    if cel_object.name in train_ref:
-        train_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
-    else:
-        test_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
 
-#test model accuracy
-preds, ground_truth = [], []
-for cel_object, query in test_ds.items():
-    n_closest = get_nn(query,train_ds,w=5,n_count=3)
-    first_closest =n_closest.loc[0]['Closest Neighbor'] #get 1st closest neighbor
-    first_closest_type,_ = get_type_name(first_closest)
-    true_type,cel_object_name = get_type_name(cel_object)
-    if first_closest_type != true_type:
-        print("===================================================")
-        print("Classification mismatch for {0}: predicted {1}, actual {2}".format(cel_object_name,first_closest_type,true_type))
-        print("===================================================")
-        print("Other possible neighbors and distances\n", n_closest)
-
-    preds.append(first_closest_type)
-    ground_truth.append(true_type)
-
-print("=================<Model Accuracy (query on samples)> ===============\n")
-print(classification_report(ground_truth,preds,zero_division=0))
-
-
-
-# for i in range(len(samples)-1):
-#     for j in range(i,len(samples)):
-#         print(DTWDistance(samples[i],samples[j]))
-#         print(euclidian_barycenter(samples))
-
+#
+# # for i in range(len(samples)-1):
+# #     for j in range(i,len(samples)):
+# #         print(DTWDistance(samples[i],samples[j]))
+# #         print(euclidian_barycenter(samples))
+#
 
 # moving files
 for pdf in os.listdir(fitsdir):
