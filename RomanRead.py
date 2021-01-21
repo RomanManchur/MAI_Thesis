@@ -185,7 +185,7 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1,
     x = columns[0]
 
     print("Processing file {0}, datatype {1}:.....".format(name,datatype))
-    quantized_ds = quantize_ds(measurements_, intervals=50)  # quantize dataset along x-axis
+    quantized_ds = quantize_ds(measurements_, intervals=100)  # quantize dataset along x-axis
     normalized_ds = normalize_df(quantized_ds, 0,
                                  method="minmax")  # normalize dataset using min-max normalization  - [0..1]"
     z = data_supression(normalized_ds,
@@ -230,7 +230,7 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
         for xx in samples[dba_predict == cluster_id]:
             plt.plot(xx.ravel(), "k-", alpha=.2)
         plt.plot(dba_model.cluster_centers_[cluster_id].ravel(), "r-")
-        plt.text(0.55, 0.85,"Cluster %d" % (cluster_id + 1),
+        plt.text(0.55, 0.85,"Cluster %d" % (cluster_id+1),
                  transform=plt.gca().transAxes)
         if cluster_id == 1:
             plt.title("DBA $k$-means")
