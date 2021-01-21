@@ -25,7 +25,11 @@ def quantize_ds(panda_ds, intervals=100):
         quant[idx] = quantized_element
 
     # print(len(set(quant)))
-    quant_ds = pd.concat([pd.DataFrame(data=quant, columns=[col_names[0]]), panda_ds[col_names[1:]]], axis=1)
+    #quant_ds = pd.concat([pd.DataFrame(data=quant, columns=[col_names[0]]), panda_ds[col_names[1:]]], axis=1)
+    quant_ds = pd.DataFrame(quant,columns=[col_names[0]])
+    original_ds_right_part = panda_ds[col_names[1:]]
+    original_ds_right_part.reset_index(drop=True,inplace=True)
+    quant_ds = quant_ds.join(original_ds_right_part)
 
     # some bins will have no data, hence need to append those with NaN
     j, missing_x, missing_y = min_value, [], []

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 
 
-def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_type):
+def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_type, scale='all'):
     '''
     :param <tupple>
             data: <dictionary> keys are filenames and associated value is pandas dataframe with values to plot
@@ -11,6 +11,7 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
     :param interpolated: <pandas DF> interpolation over missing points
     :param dst_folder: <str> path to folder in which figures needs to be stored
     :param plot_type: <str> prefix of resulting figure
+    :param scale: <str> represents data_scale, e.i: all , low , medium or high wavelength
     :return: None
     '''
     fig, axs = plt.subplots(2, 2)
@@ -25,6 +26,8 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
         y = current_figure.iloc[:, 1]
         labels = current_figure.columns.tolist()
         xlabel, ylabel = labels[0:2]
+        ccc = x[mask]
+        ddd = y[mask]
         if cell != 3:
             axs[i, j].scatter(x[mask], y[mask], c=color_map, s=0.5, cmap='gist_rainbow_r')
         else:
@@ -41,7 +44,7 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
     plt.subplots_adjust(wspace=0.5)
     f = plt.gcf()
     f.set_size_inches(8, 10)
-    plt.savefig(dst_folder + plot_type + cname + ".pdf", dpi=100)  # save data from current block
+    plt.savefig(dst_folder + plot_type + cname + "_" + scale + ".pdf", dpi=100)  # save data from current block
     plt.close()
 
 # def standardPlot(data, threshold = 1):

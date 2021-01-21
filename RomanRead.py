@@ -11,7 +11,7 @@ from tslearn.clustering import TimeSeriesKMeans
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
-import re
+import re, sys
 
 
 # Specifying the location of the data file
@@ -132,7 +132,7 @@ class Celestial:
 
 
 
-def data_processing(name, datatype, measurements, visulalize=False, threshold=1):
+def data_processing(name, datatype, measurements, visulalize=False, threshold=1, wavelenght="all"):
     """ Perform data pre-processing (and visualization optional); Returns dictionary with processed data
     :param name <str>
         name of object currently processed
@@ -142,7 +142,11 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1)
         keys: name of parameter, values: measurements taken for parameter (e.i: "V2": <array>)
     :param: visulalize <boolean>
         defines if data processig is plotted or not (default = False / non-plotted)
-
+    :param threshold: <float>
+        defines threshold used for mask filtering and plotting
+    :param wavelenght: <string>
+        controls if all data is selected or only for specific wavelength
+        can either be "low", "medium", "high" or all (default all and corresponds to all data)
 
     :return: <dict>
         data after quantization, normalization, compression and interpolation
@@ -150,7 +154,33 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1)
     """
 
     #re-arrange the data to PandasDataframe format from input dictionary
-    measurements_ = pd.DataFrame.from_dict(measurements)
+    df_loaded_data = pd.DataFrame.from_dict(measurements)
+
+    #get column name that has waves information, used for filtering data
+    if "waveV2" in df_loaded_data.columns:
+        wave_reference = "waveV2"
+    elif "waveCP" in df_loaded_data.columns:
+        wave_reference = "waveCP"
+    else:
+        print("Wrong wave length information in provided dataset, can either be waveV2 or waveCP")
+        sys.exit(1)
+
+    if wavelenght == "all":
+        measurements_ = df_loaded_data
+    elif wavelenght == "low":
+        measurements_ = df_loaded_data[df_loaded_data[wave_reference]<1.6e-6]
+    elif wavelenght == "medium":
+        measurements_ = df_loaded_data[(df_loaded_data[wave_reference]>1.6e-6) & (df_loaded_data[wave_reference]<1.7e-6)]
+    elif wavelenght == "high":
+        measurements_ = df_loaded_data[df_loaded_data[wave_reference]>1.7e-6]
+    else:
+        print("Bad filtering parameter applied for wavelength information, expected either low, medium, high or all\n"
+              "Got {0}".format(wavelenght))
+        sys.exit(1)
+    measurements_.reset_index()
+
+
+    #measurements_ = pd.DataFrame.from_dict(measurements)
     columns = measurements_.columns.to_list()
     x = columns[0]
 
@@ -170,7 +200,8 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1)
                               normalized=normalized_ds,
                               interpolated=z,
                               dst_folder=pdfdir,
-                              plot_type=datatype+"_")
+                              plot_type=datatype+"_",
+                              scale=wavelenght)
     #postprocessing data
     keys = z.columns.to_list()
     values = z.to_numpy()
@@ -375,8 +406,8 @@ for each_file in os.listdir(fitsdir):
 #Run pre-processing on data
 data_set = []
 for object_name, celestial_object in data_set_as_dict.items():
-    V2_data_processed = data_processing(object_name,"V2", celestial_object.data["V2"], visulalize=True, threshold=1)
-    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180)
+    V2_data_processed = data_processing(object_name,"V2", celestial_object.data["V2"], visulalize=True, threshold=1,wavelenght="high")
+    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180, wavelenght="high")
     celestial_object.post_processing_data = {"V2":V2_data_processed, "CP": CP_data_processed}
 
 
