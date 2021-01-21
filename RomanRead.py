@@ -97,20 +97,24 @@ def get_nn(query, train_ds, w, n_count=1):
 
 class Celestial:
     """Generic conteiner to store object information"""
-    def __init__(self, name, data,post_processing_data={}):
+    def __init__(self, name, data, object_type = None, post_processing_data={}):
         """
         Create instance of class
-        :param type: <str>
-            description of object type
+        :param name: <str>
+            name of celestial object obtained from filename
         :param data <nested dict>
             keys: represent value type (V2, CP, uv, etc) and values in inner dictionary with
             keys: equal to measurements type and values are actual measurements for the parameter
+
+        :param object_type: <str>
+            type of celestial object obtained from filename; default - None
         :param post_processing_data <nested dict>
             keys: represent value type (V2, CP, uv, etc) and values in inner dictionary with
             keys: equal to measurements type and values are actual measurements for the parameter after data processing
         """
         self.name = name
         self.data = data
+        self.object_type = object_type
         self.post_processing_data = post_processing_data
 
     def update_data(self,new_data):
@@ -229,6 +233,75 @@ def make_clusters(data_set_as_dict, data_type="V2", num_clusters=12):
     return cluster_centers
 
 
+def knn_classification(file_names, data_set_as_dict, split_ratio=0.8, meassurements_type="V2",window=5, n_neighbors=3):
+    """
+    Function that implements classification of test_ds samples based on nearest neighbors in train_ds.
+    Uses KNN nearest neighbor method and DTW metric
+    :param file_names: <dict> in form:
+        keys: celestial object type
+        values: set of celestial object names
+    :param data_set_as_dict: <dict> in form:
+        keys: celestial object name
+        values: object of class Celestial
+    :param split_ratio: <float>
+        represents how dataset is splitted in train / test data set ratios
+    :param meassurements_type: <str>
+        defines what measurement type is used to build model, can either take "V2" or "CP"
+    :param window: int
+        defines window size used in DTW metric calculation
+    :param n_neighbors: int
+        defines number of neighbors that is kept during evaluation
+
+    :return: None
+    """
+
+    print("=====================================================\n")
+    print("=================<KNN classification> ===============\n")
+    print("=====================================================\n")
+    # control check if file_names dictionary contains data, that will be in case knn on files is set to True
+    if len(file_names) > 0:  # file_names is dictionary in form {object_type:<name, name, name>, ...}
+        train_ref, test_ref = [], []
+        for k, v_ in file_names.items():
+            v = list(v_)
+            random.shuffle(v)
+            # perfrom 80/20 split
+            index = int(len(v) * (split_ratio*100) // 100)
+            train_ref.extend(v[:index])
+            test_ref.extend(v[index:])
+
+        # make train and test datasets based on V2 measurements
+        train_ds, test_ds = {}, {}
+        for celestial_object in data_set_as_dict.values():
+            if celestial_object.name in train_ref:
+                train_ds[celestial_object.name] = celestial_object.post_processing_data[meassurements_type][meassurements_type]
+            else:
+                test_ds[celestial_object.name] = celestial_object.post_processing_data[meassurements_type][meassurements_type]
+
+        print("Trainset: {0}".format(train_ref))
+        print("Testset: {0}".format(test_ref))
+
+        # test model accuracy
+        preds, ground_truth = [], []
+        for query_object_name, query_object_data in test_ds.items():
+            n_closest = get_nn(query_object_data, train_ds, w=window, n_count=n_neighbors)
+            first_closest = n_closest.loc[0]['Closest Neighbor']  # get name of the 1st closest neighbor
+            predicted_type = data_set_as_dict[first_closest].object_type
+            true_type = data_set_as_dict[query_object_name].object_type
+            if predicted_type and true_type and predicted_type != true_type:
+                print("===================================================")
+                print("Classification mismatch for {0}: predicted {1}, actual {2}".format(query_object_name,
+                                                                                          predicted_type, true_type))
+                print("===================================================")
+                print("Other possible neighbors and distances\n", n_closest)
+
+            preds.append(predicted_type)
+            ground_truth.append(true_type)
+
+        print("=================<Model Accuracy (query on samples)> ===============\n")
+        print(classification_report(ground_truth, preds, zero_division=0))
+
+
+
 # cleaning up
 for pdf in os.listdir(fitsdir):
     if pdf.endswith("pdf"):
@@ -269,8 +342,6 @@ for each_file in os.listdir(fitsdir):
     #################################################
     ####### Now you can play with the data!##########
     #################################################
-
-
     knn_on_files = True
     object_type_name = get_type_name(each_file,True)
     #track association between known object types and their names; used later in prediction and accuracy check
@@ -281,6 +352,7 @@ for each_file in os.listdir(fitsdir):
         # in case no labels are known or KNN is not applied we still need to get object names
         # to combine data from multiple measurements on same object and clustering
         object_name = object_type_name[0]
+        object_type = None
 
     #Read data and store to dictionary for easy access
     #get V2 and CP measurements
@@ -293,7 +365,7 @@ for each_file in os.listdir(fitsdir):
         c=0
     #if it's first time data for the celestial object is processed, initialize object and add it to dictionary
     else:
-        current_object = Celestial(object_name, {"V2":V2_data, "CP": CP_data})
+        current_object = Celestial(object_name, {"V2":V2_data, "CP": CP_data}, object_type)
         data_set_as_dict[object_name] = current_object
         c = 0
 
@@ -320,48 +392,69 @@ CP_cluster_centers = make_clusters(data_set_as_dict, data_type="CP", num_cluster
 
 
 
-####################
-####KNN on files####
-####################
+###################
+###KNN on files####
+###################
+#KNN on V2 values
+knn_classification(file_names,data_set_as_dict)
+
+#KNN on CP values
+knn_classification(file_names,data_set_as_dict,meassurements_type="CP")
+
+
+
+
+
+
+
+
+
+
+
+
 # print("=====================================================\n")
 # print("=================<KNN classification> ===============\n")
 # print("=====================================================\n")
 # #control check if file_names dictionary contains data, that will be in case knn on files is set to True
-# if len(file_names)>0:
+# if len(file_names)>0:#file_names is dictionary in form {object_type:<name, name, name>, ...}
 #     train_ref, test_ref = [], []
-#     for k, v in file_names.items():
+#     for k, v_ in file_names.items():
+#         v = list(v_)
 #         random.shuffle(v)
 #         #perfrom 80/20 split
 #         index = len(v) * 80 // 100
 #         train_ref.extend(v[:index])
 #         test_ref.extend(v[index:])
 #
-# #make train and test datasets
-# train_ds, test_ds = {}, {}
-# for cel_object in data_set:
-#     if cel_object.name in train_ref:
-#         train_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
-#     else:
-#         test_ds[cel_object.name] = cel_object.post_processing_data["V2"]["V2"]
+#     # make train and test datasets based on V2 measurements
+#     train_ds, test_ds = {}, {}
+#     for celestial_object in data_set_as_dict.values():
+#         if celestial_object.name in train_ref:
+#             train_ds[celestial_object.name] = celestial_object.post_processing_data["V2"]["V2"]
+#         else:
+#             test_ds[celestial_object.name] = celestial_object.post_processing_data["V2"]["V2"]
 #
-# #test model accuracy
-# preds, ground_truth = [], []
-# for cel_object, query in test_ds.items():
-#     n_closest = get_nn(query,train_ds,w=5,n_count=3)
-#     first_closest =n_closest.loc[0]['Closest Neighbor'] #get 1st closest neighbor
-#     first_closest_type,_ = get_type_name(first_closest)
-#     true_type,cel_object_name = get_type_name(cel_object)
-#     if first_closest_type != true_type:
-#         print("===================================================")
-#         print("Classification mismatch for {0}: predicted {1}, actual {2}".format(cel_object_name,first_closest_type,true_type))
-#         print("===================================================")
-#         print("Other possible neighbors and distances\n", n_closest)
+#     print("Trainset: {0}".format(train_ref))
+#     print("Testset: {0}".format(test_ref))
 #
-#     preds.append(first_closest_type)
-#     ground_truth.append(true_type)
+#     #test model accuracy
+#     preds, ground_truth = [], []
+#     for query_object_name, query_object_data in test_ds.items():
+#         n_closest = get_nn(query_object_data,train_ds,w=5,n_count=3)
+#         first_closest =n_closest.loc[0]['Closest Neighbor'] #get name of the 1st closest neighbor
+#         predicted_type = data_set_as_dict[first_closest].object_type
+#         true_type = data_set_as_dict[query_object_name].object_type
+#         if predicted_type and true_type and predicted_type != true_type:
+#             print("===================================================")
+#             print("Classification mismatch for {0}: predicted {1}, actual {2}".format(query_object_name,predicted_type,true_type))
+#             print("===================================================")
+#             print("Other possible neighbors and distances\n", n_closest)
 #
-# print("=================<Model Accuracy (query on samples)> ===============\n")
-# print(classification_report(ground_truth,preds,zero_division=0))
+#         preds.append(predicted_type)
+#         ground_truth.append(true_type)
+#
+#     print("=================<Model Accuracy (query on samples)> ===============\n")
+#     print(classification_report(ground_truth,preds,zero_division=0))
 
 
 #
