@@ -232,9 +232,13 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
         plt.plot(dba_model.cluster_centers_[cluster_id].ravel(), "r-")
         plt.text(0.55, 0.85,"Cluster %d" % (cluster_id+1),
                  transform=plt.gca().transAxes)
-        if cluster_id == 1:
+        plt.ylim(0.95 * samples.min(), 1.05 * samples.max())
+        if cluster_id == 0:
             plt.title("DBA $k$-means")
     # plt.tight_layout()
+    plt.subplots_adjust(hspace=0.5)
+    f = plt.gcf()
+    f.set_size_inches(8, 10)
     plt.savefig(dst_folder + data_type + "_clustering.pdf", dpi=100)
     plt.close()
 
@@ -406,8 +410,8 @@ for each_file in os.listdir(fitsdir):
 #Run pre-processing on data
 data_set = []
 for object_name, celestial_object in data_set_as_dict.items():
-    V2_data_processed = data_processing(object_name,"V2", celestial_object.data["V2"], visulalize=True, threshold=1,wavelenght="high")
-    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180, wavelenght="high")
+    V2_data_processed = data_processing(object_name,"V2", celestial_object.data["V2"], visulalize=True, threshold=1,wavelenght="all")
+    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180, wavelenght="all")
     celestial_object.post_processing_data = {"V2":V2_data_processed, "CP": CP_data_processed}
 
 
