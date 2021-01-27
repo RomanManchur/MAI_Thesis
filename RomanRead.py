@@ -179,10 +179,15 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1,
         sys.exit(1)
     measurements_.reset_index()
 
-
     #measurements_ = pd.DataFrame.from_dict(measurements)
     columns = measurements_.columns.to_list()
     x = columns[0]
+
+    # if no data present in filtered dataset exit processing
+    if measurements_.empty:
+        z_dict = {columns[index]: np.array([]) for index in range(len(columns))}
+        return z_dict
+
 
     print("Processing file {0}, datatype {1}:.....".format(name,datatype))
     quantized_ds = quantize_ds(measurements_, intervals=100)  # quantize dataset along x-axis
@@ -248,15 +253,21 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
 def make_clusters(data_set_as_dict, data_type="V2", num_clusters=12):
     celestial_object_data = list(data_set_as_dict.values())
     d1, d2 = len(data_set_as_dict), len(celestial_object_data[0].post_processing_data[data_type][data_type])
-    samples = np.zeros((d1, d2))#building data matrix used in clustering decision
+    samples = np.zeros((0, d2))#building data matrix used in clustering decision
     samples_names = []#building associative list with celestial object names (that is to address fact that list are non-ordered)
     for idx, cel_object in enumerate(celestial_object_data):
-        samples[idx] = cel_object.post_processing_data[data_type][data_type]
+        # there might be empty datasets after filtering skip processing for those and continue with next object
+        if cel_object.post_processing_data[data_type][data_type].size == 0:
+            data_set_as_dict.pop(cel_object.name,None)#remove objects with no measurements
+            continue
+        samples = np.vstack((samples, cel_object.post_processing_data[data_type][data_type]))
+        #samples[idx] = cel_object.post_processing_data[data_type][data_type]#this can't be used as we might have missing records and indexing will be affected with removal opertation
         samples_names.append(cel_object.name)
     cluster_centers = DBA_model(samples, samples_names, num_clusters=num_clusters, dst_folder=pdfdir, data_type=data_type)
 
     # calculate distance to cluster center from each object, e.i: certanity rate
-    d2 = cluster_centers.shape[0]
+    # re-defining dimensions: d1 may be lower than original due to filtered fields, d2 - correspond to avg.sequence size
+    d1,d2 = len(samples_names), cluster_centers.shape[0]
     distance_to_centers_ = np.array(np.ones((d1, d2)) * np.inf)
     distance_to_centers = pd.DataFrame(distance_to_centers_, index=samples_names,
                                        columns=[x for x in range(num_clusters)])
@@ -422,7 +433,7 @@ V2_cluster_centers = make_clusters(data_set_as_dict, data_type="V2", num_cluster
 
 ###############
 ###CP model####
-###############
+##############
 CP_cluster_centers = make_clusters(data_set_as_dict, data_type="CP", num_clusters=7)
 
 
