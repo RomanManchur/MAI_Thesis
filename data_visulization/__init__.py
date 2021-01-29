@@ -1,1 +1,2 @@
 from .standardPlot import plotData
+from .plot_avarage_sequence import plot_avarage_sequence

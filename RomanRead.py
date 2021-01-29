@@ -4,7 +4,7 @@ import random
 import pandas as pd
 from sklearn.metrics import classification_report
 import ReadOIFITS as oifits
-from data_visulization import standardPlot
+from data_visulization import *
 from eval_distance import *
 from file_preprocessing import *
 from tslearn.clustering import TimeSeriesKMeans
@@ -214,7 +214,7 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1,
     return z_dict
 
 
-def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
+def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type, plot=False):
     """
     Builds DBA clustering model based on input data, prints data points associated with cluster
     and plots data and avg sequence
@@ -232,14 +232,15 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
         for each_object in object_incluster_indexes:
             print("--> associated object: {0}".format(samples_names[each_object]))#print name of celestial object associated with cluster
         #plot clusters and data
-        for xx in samples[dba_predict == cluster_id]:
-            plt.plot(xx.ravel(), "k-", alpha=.2)
-        plt.plot(dba_model.cluster_centers_[cluster_id].ravel(), "r-")
-        plt.text(0.55, 0.85,"Cluster %d" % (cluster_id+1),
-                 transform=plt.gca().transAxes)
-        plt.ylim(0.95 * samples.min(), 1.05 * samples.max())
-        if cluster_id == 0:
-            plt.title("DBA $k$-means")
+        if plot:
+            for xx in samples[dba_predict == cluster_id]:
+                plt.plot(xx.ravel(), "k-", alpha=.2)
+            plt.plot(dba_model.cluster_centers_[cluster_id].ravel(), "r-")
+            plt.text(0.55, 0.85,"Cluster %d" % (cluster_id+1),
+                     transform=plt.gca().transAxes)
+            plt.ylim(0.95 * samples.min(), 1.05 * samples.max())
+            if cluster_id == 0:
+                plt.title("DBA $k$-means")
     # plt.tight_layout()
     plt.subplots_adjust(hspace=0.5)
     f = plt.gcf()
@@ -250,20 +251,32 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type):
     return dba_model.cluster_centers_
 
 
-def make_clusters(data_set_as_dict, data_type="V2", num_clusters=12):
+def make_clusters(data_set_as_dict, wavelength_scale="V2_all", data_type="V2", num_clusters=12, plot=False):
+    '''
+    Function that builds clusters using sequence avaraging
+
+    :param data_set_as_dict <dict>
+        keys: celestial object names; values: object of Celestial type
+    :param wavelength_scale <str>
+        can either be - V2_low, V2_medium, V2_high or V2_all and similar values for CP parameter
+    :param: data_type <str>
+        can either be V2 or CP
+    :param num_clusters <int>
+        defines number of clusters build
+    '''
     celestial_object_data = list(data_set_as_dict.values())
-    d1, d2 = len(data_set_as_dict), len(celestial_object_data[0].post_processing_data[data_type][data_type])
+    d1, d2 = len(data_set_as_dict), len(celestial_object_data[0].post_processing_data[wavelength_scale][data_type])
     samples = np.zeros((0, d2))#building data matrix used in clustering decision
     samples_names = []#building associative list with celestial object names (that is to address fact that list are non-ordered)
     for idx, cel_object in enumerate(celestial_object_data):
         # there might be empty datasets after filtering skip processing for those and continue with next object
-        if cel_object.post_processing_data[data_type][data_type].size == 0:
+        if cel_object.post_processing_data[wavelength_scale][data_type].size == 0:
             data_set_as_dict.pop(cel_object.name,None)#remove objects with no measurements
             continue
-        samples = np.vstack((samples, cel_object.post_processing_data[data_type][data_type]))
+        samples = np.vstack((samples, cel_object.post_processing_data[wavelength_scale][data_type]))
         #samples[idx] = cel_object.post_processing_data[data_type][data_type]#this can't be used as we might have missing records and indexing will be affected with removal opertation
         samples_names.append(cel_object.name)
-    cluster_centers = DBA_model(samples, samples_names, num_clusters=num_clusters, dst_folder=pdfdir, data_type=data_type)
+    cluster_centers = DBA_model(samples, samples_names, num_clusters=num_clusters, dst_folder=pdfdir, data_type=wavelength_scale, plot=plot)
 
     # calculate distance to cluster center from each object, e.i: certanity rate
     # re-defining dimensions: d1 may be lower than original due to filtered fields, d2 - correspond to avg.sequence size
@@ -273,13 +286,13 @@ def make_clusters(data_set_as_dict, data_type="V2", num_clusters=12):
                                        columns=[x for x in range(num_clusters)])
     for i, cel_object in enumerate(data_set_as_dict.values()):
         for j, cluster in enumerate(cluster_centers):
-            distance_to_centers.iloc[i, j] = DTWDistance(cel_object.post_processing_data[data_type][data_type], cluster)
-    distance_to_centers.to_csv(csvdir + data_type + '_distances.csv')
+            distance_to_centers.iloc[i, j] = DTWDistance(cel_object.post_processing_data[wavelength_scale][data_type], cluster)
+    distance_to_centers.to_csv(csvdir + wavelength_scale + data_type + '_distances.csv')
 
     return cluster_centers
 
 
-def knn_classification(file_names, data_set_as_dict, split_ratio=0.8, meassurements_type="V2",window=5, n_neighbors=3):
+def knn_classification(file_names, data_set_as_dict, split_ratio=0.8, wavelength_scale="V2_all",meassurements_type="V2",window=5, n_neighbors=3):
     """
     Function that implements classification of test_ds samples based on nearest neighbors in train_ds.
     Uses KNN nearest neighbor method and DTW metric
@@ -319,9 +332,9 @@ def knn_classification(file_names, data_set_as_dict, split_ratio=0.8, meassureme
         train_ds, test_ds = {}, {}
         for celestial_object in data_set_as_dict.values():
             if celestial_object.name in train_ref:
-                train_ds[celestial_object.name] = celestial_object.post_processing_data[meassurements_type][meassurements_type]
+                train_ds[celestial_object.name] = celestial_object.post_processing_data[wavelength_scale][meassurements_type]
             else:
-                test_ds[celestial_object.name] = celestial_object.post_processing_data[meassurements_type][meassurements_type]
+                test_ds[celestial_object.name] = celestial_object.post_processing_data[wavelength_scale][meassurements_type]
 
         print("Trainset: {0}".format(train_ref))
         print("Testset: {0}".format(test_ref))
@@ -421,21 +434,62 @@ for each_file in os.listdir(fitsdir):
 #Run pre-processing on data
 data_set = []
 for object_name, celestial_object in data_set_as_dict.items():
-    V2_data_processed = data_processing(object_name,"V2", celestial_object.data["V2"], visulalize=True, threshold=1,wavelenght="all")
-    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180, wavelenght="all")
-    celestial_object.post_processing_data = {"V2":V2_data_processed, "CP": CP_data_processed}
+    #all wavelengths
+    V2_data_processed = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=True, threshold=1,
+                                        wavelenght="all")
+    CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180,
+                                        wavelenght="all")
+    #low wavelengths
+    V2_data_processed_low = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
+                                        wavelenght="low")
+    CP_data_processed_low = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
+                                        wavelenght="low")
+    #medium wavelengths
+    V2_data_processed_medium = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
+                                        wavelenght="medium")
+    CP_data_processed_medium = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
+                                        wavelenght="medium")
+    #high wavelengths
+    V2_data_processed_high = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
+                                        wavelenght="high")
+    CP_data_processed_high = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
+                                        wavelenght="high")
+
+    celestial_object.post_processing_data = {"V2_all":V2_data_processed, "CP_all": CP_data_processed,
+                                             "V2_low":V2_data_processed_low, "CP_low": CP_data_processed_low,
+                                             "V2_medium":V2_data_processed_medium, "CP_medium": CP_data_processed_medium,
+                                             "V2_high":V2_data_processed_high, "CP_high": CP_data_processed_high}
 
 
 ###############
 ###V2 model####
 ###############
-V2_cluster_centers = make_clusters(data_set_as_dict, data_type="V2", num_clusters=7)
+V2_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="V2_all", data_type="V2", num_clusters=7,plot=True)
+V2_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="V2_low", data_type="V2", num_clusters=7)
+V2_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="V2_medium", data_type="V2", num_clusters=7)
+V2_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="V2_high", data_type="V2", num_clusters=7)
+
+plot_avarage_sequence(V2_cluster_centers,V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high,
+                      legend=["all", "low", "medium", "high"],
+                      plot_type="V2",
+                      path=pdfdir + "V2_averages.pdf",
+                      num_clusters=7)
+
+
 
 ###############
 ###CP model####
 ##############
-CP_cluster_centers = make_clusters(data_set_as_dict, data_type="CP", num_clusters=7)
+CP_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="CP_all", data_type="CP", num_clusters=7,plot=True)
+CP_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="CP_low", data_type="CP", num_clusters=7)
+CP_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="CP_medium", data_type="CP", num_clusters=7)
+CP_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="CP_high", data_type="CP", num_clusters=7)
 
+plot_avarage_sequence(CP_cluster_centers,CP_cluster_centers_low, CP_cluster_centers_medium, CP_cluster_centers_high,
+                      legend=["all", "low", "medium", "high"],
+                      plot_type="CP",
+                      path=pdfdir + "CP_averages.pdf",
+                      num_clusters=7)
 
 
 ###################
@@ -445,7 +499,7 @@ CP_cluster_centers = make_clusters(data_set_as_dict, data_type="CP", num_cluster
 knn_classification(file_names,data_set_as_dict)
 
 #KNN on CP values
-knn_classification(file_names,data_set_as_dict,meassurements_type="CP")
+knn_classification(file_names,data_set_as_dict,wavelength_scale="CP_all", meassurements_type="CP")
 
 
 
