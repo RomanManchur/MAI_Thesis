@@ -95,6 +95,33 @@ def get_nn(query, train_ds, w, n_count=1):
     return result
 
 
+def make_dtw_distance_table(dataset, feature, window=5):
+    '''Returns DTW distance between each member in dataset stored in pandas table
+
+    :param: dataset <dictionary>
+        keys: celestial object names
+        values: Celestial object
+    :param feature <tuple>
+        [0] - defines wavelength scale
+        [1] - defines feature to work on, either V2 or CP
+    :param window <int>
+        defines window size for DTW calculation
+    :return dtw_distance_table <panda.DataFrame>
+    '''
+
+    dim = len(dataset)
+    dtw_distance_table=np.ones((dim,dim))*np.inf
+    d1,d2 = feature
+    for i, ni in enumerate(dataset):
+        for j, nj in enumerate(dataset):
+            if ni == nj:#no distance between two same elements
+                continue
+            else:
+                dtw_distance_table[i][j] = DTWDistance(dataset[ni].post_processing_data[d1][d2],
+                                                         dataset[nj].post_processing_data[d1][d2],w=window)
+    return pd.DataFrame(dtw_distance_table,index=list(dataset.keys()), columns=list(dataset.keys()))
+
+
 class Celestial:
     """Generic conteiner to store object information"""
     def __init__(self, name, data, object_type = None, post_processing_data={}):
@@ -501,11 +528,16 @@ knn_classification(file_names,data_set_as_dict)
 #KNN on CP values
 knn_classification(file_names,data_set_as_dict,wavelength_scale="CP_all", meassurements_type="CP")
 
+#Calculate sum of squared disatances for each wavelenght
+V2_dtw_low = make_dtw_distance_table(data_set_as_dict, ("V2_low", "V2"))
+V2_dtw_medium = make_dtw_distance_table(data_set_as_dict, ("V2_medium", "V2"))
+V2_dtw_high = make_dtw_distance_table(data_set_as_dict, ("V2_high", "V2"))
 
+V2_dtw_total = V2_dtw_low + V2_dtw_medium.values + V2_dtw_high.values
 
-
-
-
+print("{0}\n{1}\n{2}\n{3}\n".format(V2_dtw_low,V2_dtw_medium, V2_dtw_high, V2_dtw_total))
+closest_neighbor = V2_dtw_total.idxmin(axis=1)
+print(closest_neighbor)
 
 
 
