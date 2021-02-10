@@ -252,7 +252,6 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type, plot=Fa
     dba_model = TimeSeriesKMeans(n_clusters=num_clusters,n_init=2, metric="dtw",max_iter_barycenter=10,verbose=True,random_state=seed)
     dba_predict = dba_model.fit_predict(samples)
     for cluster_id in range(num_clusters):
-        plt.subplot(num_clusters, 1, 1 + cluster_id)
         #get indexes of rows associated with current cluster in dataset
         object_incluster_indexes = np.argwhere(dba_predict == cluster_id).ravel()
         print("============Cluster#{0}=============".format(cluster_id+1))
@@ -260,6 +259,7 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type, plot=Fa
             print("--> associated object: {0}".format(samples_names[each_object]))#print name of celestial object associated with cluster
         #plot clusters and data
         if plot:
+            plt.subplot(num_clusters, 1, 1 + cluster_id)
             for xx in samples[dba_predict == cluster_id]:
                 plt.plot(xx.ravel(), "k-", alpha=.2)
             plt.plot(dba_model.cluster_centers_[cluster_id].ravel(), "r-")
@@ -268,12 +268,12 @@ def DBA_model(samples,samples_names, num_clusters,dst_folder, data_type, plot=Fa
             plt.ylim(0.95 * samples.min(), 1.05 * samples.max())
             if cluster_id == 0:
                 plt.title("DBA $k$-means")
-    # plt.tight_layout()
-    plt.subplots_adjust(hspace=0.5)
-    f = plt.gcf()
-    f.set_size_inches(8, 10)
-    plt.savefig(dst_folder + data_type + "_clustering.pdf", dpi=100)
-    plt.close()
+            # plt.tight_layout()
+            plt.subplots_adjust(hspace=0.5)
+            f = plt.gcf()
+            f.set_size_inches(8, 10)
+            plt.savefig(dst_folder + data_type + "_clustering.pdf", dpi=100)
+            plt.close()
 
     return dba_model.cluster_centers_
 
@@ -467,12 +467,12 @@ for object_name, celestial_object in data_set_as_dict.items():
     CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180,
                                         wavelenght="all")
     #low wavelengths
-    V2_data_processed_low = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
+    V2_data_processed_low = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=True, threshold=1,
                                         wavelenght="low")
     CP_data_processed_low = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
                                         wavelenght="low")
     #medium wavelengths
-    V2_data_processed_medium = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
+    V2_data_processed_medium = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=True, threshold=1,
                                         wavelenght="medium")
     CP_data_processed_medium = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
                                         wavelenght="medium")
@@ -496,27 +496,14 @@ V2_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="V2_lo
 V2_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="V2_medium", data_type="V2", num_clusters=7)
 V2_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="V2_high", data_type="V2", num_clusters=7)
 
+
+
 plot_avarage_sequence(V2_cluster_centers,V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high,
                       legend=["all", "low", "medium", "high"],
                       plot_type="V2",
                       path=pdfdir + "V2_averages.pdf",
                       num_clusters=7)
 
-
-
-###############
-###CP model####
-##############
-CP_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="CP_all", data_type="CP", num_clusters=7,plot=True)
-CP_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="CP_low", data_type="CP", num_clusters=7)
-CP_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="CP_medium", data_type="CP", num_clusters=7)
-CP_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="CP_high", data_type="CP", num_clusters=7)
-
-plot_avarage_sequence(CP_cluster_centers,CP_cluster_centers_low, CP_cluster_centers_medium, CP_cluster_centers_high,
-                      legend=["all", "low", "medium", "high"],
-                      plot_type="CP",
-                      path=pdfdir + "CP_averages.pdf",
-                      num_clusters=7)
 
 
 ###################
