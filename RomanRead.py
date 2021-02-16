@@ -16,10 +16,10 @@ import re, sys
 
 # Specifying the location of the data file
 dir = "/Users/rmanchur/Documents/MAI_Thesis/data/"
-fitsdir = dir + "all_data/all_sets/"
+# fitsdir = dir + "all_data/all_sets/"
 # fitsdir = dir + "all_data/2stars/"
 # fitsdir = dir + "all_data/StellarSurface/"
-# fitsdir = dir + "all_data/Single/"
+fitsdir = dir + "all_data/Single/"
 pdfdir = dir + "pdf/"
 csvdir = dir + "csv/"
 data_set_as_dict = {}
@@ -218,7 +218,7 @@ def data_processing(name, datatype, measurements, visulalize=False, threshold=1,
 
     print("Processing file {0}, datatype {1}:.....".format(name,datatype))
     quantized_ds = quantize_ds(measurements_, intervals=100)  # quantize dataset along x-axis
-    normalized_ds = normalize_df(quantized_ds, 0,
+    normalized_ds = normalize_df(quantized_ds, 1,
                                  method="minmax")  # normalize dataset using min-max normalization  - [0..1]"
     z = data_supression(normalized_ds,
                         method="median")  # compress data point in each bucket using mean or median compression
@@ -487,100 +487,82 @@ for object_name, celestial_object in data_set_as_dict.items():
                                              "V2_medium":V2_data_processed_medium, "CP_medium": CP_data_processed_medium,
                                              "V2_high":V2_data_processed_high, "CP_high": CP_data_processed_high}
 
-
-###############
-###V2 model####
-###############
-V2_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="V2_all", data_type="V2", num_clusters=7,plot=True)
-V2_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="V2_low", data_type="V2", num_clusters=7)
-V2_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="V2_medium", data_type="V2", num_clusters=7)
-V2_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="V2_high", data_type="V2", num_clusters=7)
-
-
-
-plot_avarage_sequence(V2_cluster_centers,V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high,
-                      legend=["all", "low", "medium", "high"],
-                      plot_type="V2",
-                      path=pdfdir + "V2_averages.pdf",
-                      num_clusters=7)
-
-
-
-###################
-###KNN on files####
-###################
-#KNN on V2 values
-knn_classification(file_names,data_set_as_dict)
-
-#KNN on CP values
-knn_classification(file_names,data_set_as_dict,wavelength_scale="CP_all", meassurements_type="CP")
-
-#Calculate sum of squared disatances for each wavelenght
-V2_dtw_low = make_dtw_distance_table(data_set_as_dict, ("V2_low", "V2"))
-V2_dtw_medium = make_dtw_distance_table(data_set_as_dict, ("V2_medium", "V2"))
-V2_dtw_high = make_dtw_distance_table(data_set_as_dict, ("V2_high", "V2"))
-
-V2_dtw_total = V2_dtw_low + V2_dtw_medium.values + V2_dtw_high.values
-
-print("{0}\n{1}\n{2}\n{3}\n".format(V2_dtw_low,V2_dtw_medium, V2_dtw_high, V2_dtw_total))
-closest_neighbor = V2_dtw_total.idxmin(axis=1)
-print(closest_neighbor)
-
-
-
-
-
-
-# print("=====================================================\n")
-# print("=================<KNN classification> ===============\n")
-# print("=====================================================\n")
-# #control check if file_names dictionary contains data, that will be in case knn on files is set to True
-# if len(file_names)>0:#file_names is dictionary in form {object_type:<name, name, name>, ...}
-#     train_ref, test_ref = [], []
-#     for k, v_ in file_names.items():
-#         v = list(v_)
-#         random.shuffle(v)
-#         #perfrom 80/20 split
-#         index = len(v) * 80 // 100
-#         train_ref.extend(v[:index])
-#         test_ref.extend(v[index:])
 #
-#     # make train and test datasets based on V2 measurements
-#     train_ds, test_ds = {}, {}
-#     for celestial_object in data_set_as_dict.values():
-#         if celestial_object.name in train_ref:
-#             train_ds[celestial_object.name] = celestial_object.post_processing_data["V2"]["V2"]
-#         else:
-#             test_ds[celestial_object.name] = celestial_object.post_processing_data["V2"]["V2"]
+# ###############
+# ###V2 model####
+# ###############
+# V2_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="V2_all", data_type="V2", num_clusters=7,plot=True)
+# V2_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="V2_low", data_type="V2", num_clusters=7)
+# V2_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="V2_medium", data_type="V2", num_clusters=7)
+# V2_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="V2_high", data_type="V2", num_clusters=7)
 #
-#     print("Trainset: {0}".format(train_ref))
-#     print("Testset: {0}".format(test_ref))
 #
-#     #test model accuracy
-#     preds, ground_truth = [], []
-#     for query_object_name, query_object_data in test_ds.items():
-#         n_closest = get_nn(query_object_data,train_ds,w=5,n_count=3)
-#         first_closest =n_closest.loc[0]['Closest Neighbor'] #get name of the 1st closest neighbor
-#         predicted_type = data_set_as_dict[first_closest].object_type
-#         true_type = data_set_as_dict[query_object_name].object_type
-#         if predicted_type and true_type and predicted_type != true_type:
-#             print("===================================================")
-#             print("Classification mismatch for {0}: predicted {1}, actual {2}".format(query_object_name,predicted_type,true_type))
-#             print("===================================================")
-#             print("Other possible neighbors and distances\n", n_closest)
 #
-#         preds.append(predicted_type)
-#         ground_truth.append(true_type)
+# plot_avarage_sequence(V2_cluster_centers,V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high,
+#                       legend=["all", "low", "medium", "high"],
+#                       plot_type="V2",
+#                       path=pdfdir + "V2_averages.pdf",
+#                       num_clusters=7)
 #
-#     print("=================<Model Accuracy (query on samples)> ===============\n")
-#     print(classification_report(ground_truth,preds,zero_division=0))
-
-
 #
-# # for i in range(len(samples)-1):
-# #     for j in range(i,len(samples)):
-# #         print(DTWDistance(samples[i],samples[j]))
-# #         print(euclidian_barycenter(samples))
+# ###############
+# ###CP model####
+# ###############
+# CP_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="CP_all", data_type="CP", num_clusters=7,plot=True)
+# CP_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="CP_low", data_type="CP", num_clusters=7)
+# CP_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="CP_medium", data_type="CP", num_clusters=7)
+# CP_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="CP_high", data_type="CP", num_clusters=7)
+#
+#
+#
+# plot_avarage_sequence(CP_cluster_centers,CP_cluster_centers_low, CP_cluster_centers_medium, CP_cluster_centers_high,
+#                       legend=["all", "low", "medium", "high"],
+#                       plot_type="CP",
+#                       path=pdfdir + "CP_averages.pdf",
+#                       num_clusters=7)
+#
+#
+#
+#
+# ###################
+# ###KNN on files####
+# ###################
+# #KNN on V2 values
+# knn_classification(file_names,data_set_as_dict)
+#
+# #KNN on CP values
+# knn_classification(file_names,data_set_as_dict,wavelength_scale="CP_all", meassurements_type="CP")
+#
+# #Calculate sum of squared disatances for each wavelenght
+# V2_dtw_low = make_dtw_distance_table(data_set_as_dict, ("V2_low", "V2"))
+# V2_dtw_medium = make_dtw_distance_table(data_set_as_dict, ("V2_medium", "V2"))
+# V2_dtw_high = make_dtw_distance_table(data_set_as_dict, ("V2_high", "V2"))
+#
+# V2_dtw_total = V2_dtw_low + V2_dtw_medium.values + V2_dtw_high.values
+#
+# print("{0}\n{1}\n{2}\n{3}\n".format(V2_dtw_low,V2_dtw_medium, V2_dtw_high, V2_dtw_total))
+# closest_neighbor = V2_dtw_total.idxmin(axis=1)
+# print(closest_neighbor)
+#
+#
+# #Calculate sum of squared disatances for each wavelenght based on CP
+# print("===============CP====================")
+#
+# CP_dtw_low = make_dtw_distance_table(data_set_as_dict, ("CP_low", "CP"))
+# CP_dtw_medium = make_dtw_distance_table(data_set_as_dict, ("CP_medium", "CP"))
+# CP_dtw_high = make_dtw_distance_table(data_set_as_dict, ("CP_high", "CP"))
+#
+# CP_dtw_total = CP_dtw_low + CP_dtw_medium.values + CP_dtw_high.values
+#
+# print("{0}\n{1}\n{2}\n{3}\n".format(CP_dtw_low,CP_dtw_medium, CP_dtw_high, CP_dtw_total))
+# closest_neighbor = CP_dtw_total.idxmin(axis=1)
+# print(closest_neighbor)
+#
+#
+# #check if any pattern is observed if distance is calculated from 0,0
+# for cname, cvalues in data_set_as_dict.items():
+#     var = cvalues.post_processing_data["V2_all"]["V2"]
+#
 #
 
 # moving files

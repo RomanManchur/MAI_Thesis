@@ -13,10 +13,7 @@ def plot_avarage_sequence(centers, *args, **kwargs):
         plt.title("Cluster{0}".format(i + 1))
         ymin = centers[i].min()
         ymax = centers[i].max()
-        if ymin > 0:
-            plt.ylim(0.90 * ymin, 1.1 * ymax)
-        else:
-            plt.ylim(1.1 * ymin, 1.1 * ymax)
+
 
     # plot center sequences based on wavelength [low, medium, high]
     for j in range(3):
@@ -35,7 +32,17 @@ def plot_avarage_sequence(centers, *args, **kwargs):
                     cluster_id = c
                     distance = current_distance
             cluster_sequnce_membership[cluster_id].append([i,distance])
-
+            ymin_ = args[j][i].min()
+            ymax_ = args[j][i].min()
+            if ymin_ < ymin:
+                ymin = ymax_
+            if ymax_ > ymax:
+                ymax = ymax_
+            if j == 2:
+                if ymin > 0:
+                    plt.ylim(0.90 * ymin, 1.1 * ymax)
+                else:
+                    plt.ylim(1.1 * ymin, 1.1 * ymax)
 
         for k,v in cluster_sequnce_membership.items():
             if len(v) == 1:
