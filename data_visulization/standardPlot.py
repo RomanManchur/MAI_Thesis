@@ -29,7 +29,11 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
         ccc = x[mask]
         ddd = y[mask]
         if cell != 3:
-            axs[i, j].scatter(x[mask], y[mask], c=color_map, s=0.5, cmap='gist_rainbow_r')
+            if len(ccc) == len(ddd) and len(ccc) == len(color_map):
+                axs[i, j].scatter(x[mask], y[mask], c=color_map, s=0.5, cmap='gist_rainbow_r')
+            else:
+                axs[i, j].scatter(x[mask], y[mask])
+                #TODO add logging process for above condition where threshold is not defined well.
         else:
             color_map = current_figure.iloc[:, 3]
             axs[i, j].scatter(x[mask], y[mask], c=color_map[mask], s=0.5, cmap='gist_rainbow_r')

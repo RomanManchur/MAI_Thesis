@@ -16,6 +16,10 @@ def quantize_ds(panda_ds, intervals=100):
     max_value = math.ceil(x.max())
     min_value = math.floor(x.min())
     interval_range = max_value - min_value
+
+    #Pass condition to avoid zero devision if data doesn't span on range and either zero or represented by same x-values
+    if interval_range == 0: return panda_ds
+
     interval_width = interval_range // intervals
     n = len(x)
     quant = np.zeros(n)
