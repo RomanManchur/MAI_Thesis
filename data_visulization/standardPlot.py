@@ -31,6 +31,10 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
         if cell != 3:
             if len(ccc) == len(ddd) and len(ccc) == len(color_map):
                 axs[i, j].scatter(x[mask], y[mask], c=color_map, s=0.5, cmap='gist_rainbow_r')
+                if plot_type == "V2_" and cell == 0:
+                    axs[0,0].set_ylim([0,1])
+                elif plot_type == "CP_" and cell == 0:
+                    axs[0,0].set_ylim([-180,180])
             else:
                 axs[i, j].scatter(x[mask], y[mask])
                 #TODO add logging process for above condition where threshold is not defined well.
@@ -43,7 +47,7 @@ def plotData(raw_data, quantized, normalized, interpolated, dst_folder, plot_typ
     axs[0, 0].set_title("Original data")
     axs[0, 1].set_title("Quantized data")
     axs[1, 0].set_title("Normalized data")
-    axs[1, 1].set_title("Supressed+Interpolation")
+    axs[1, 1].set_title("Averaging  and Interpolation")
     plt.subplots_adjust(hspace=0.5)
     plt.subplots_adjust(wspace=0.5)
     f = plt.gcf()

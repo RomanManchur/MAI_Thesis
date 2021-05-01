@@ -15,10 +15,10 @@ import re, sys
 
 # Specifying the location of the data file
 dir = "/Users/rmanchur/Documents/MAI_Thesis/data/"
-fitsdir = dir + "all_data/all_sets/"
+# fitsdir = dir + "all_data/all_sets/"
 # fitsdir = dir + "all_data/2stars/"
 # fitsdir = dir + "all_data/StellarSurface/"
-# fitsdir = dir + "all_data/Single/"
+fitsdir = dir + "all_data/Single/"
 # fitsdir = dir + "all_data/renamed/"
 target_list_path = "data/points_to_check/target_list_small.txt"
 # target_list_path = "data/points_to_check/broken.txt"
@@ -307,8 +307,9 @@ def DBA_model(samples, samples_names, num_clusters, dst_folder, data_type, plot=
             plt.subplots_adjust(hspace=0.5)
             f = plt.gcf()
             f.set_size_inches(8, 10)
-            plt.savefig(dst_folder + data_type + "_clustering.pdf", dpi=100)
-            plt.close()
+            if cluster_id == num_clusters:
+                plt.savefig(dst_folder + data_type + "_clustering.pdf", dpi=100)
+                plt.close()
 
     return dba_model.cluster_centers_
 
@@ -462,7 +463,7 @@ for object_count, target_object in enumerate(target_list):
 
             # A plot to quickly visualise the dataset. CPext sets the vertical limits for the closure phases (CPs) plot:
             # By construction CPs are between -180 and 180 degrees but sometimes the signal is small.
-            # data.plotV2CP(CPext=15, lines=False,save=True, name=each_file+".pdf")
+            data.plotV2CP(CPext=15, lines=False,save=True, name=each_file+".pdf")
 
             # Creating a dictionary with meaningful data (easier to manipulate)
             datadict = data.givedataJK()
@@ -525,8 +526,18 @@ for object_count, target_object in enumerate(target_list):
             #all wavelengths
             V2_data_processed = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=True, threshold=1,
                                                 wavelenght="all")
+            tmp_pd = pd.DataFrame(data=celestial_object.data["V2"], columns=list(celestial_object.data["V2"].keys()))
+            print(object_name)
+            print(tmp_pd)
+
+
             CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180,
                                                 wavelenght="all")
+
+            tmp_pd = pd.DataFrame(data=celestial_object.data["CP"], columns=list(celestial_object.data["CP"].keys()))
+            print(object_name)
+            print(tmp_pd)
+
             #low wavelengths
             V2_data_processed_low = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
                                                 wavelenght="low")
@@ -642,134 +653,6 @@ for object_count, target_object in enumerate(target_list):
         data_set_as_dict = {}
 
 
-# #At this point all data is read from FITS files and stored to 'data_set_as_dict', each key represent object name and
-# #associated value is object of class 'Celestial'
-#
-# #Run pre-processing on data
-# data_set = []
-# for object_name, celestial_object in data_set_as_dict.items():
-#     #all wavelengths
-#     V2_data_processed = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=True, threshold=1,
-#                                         wavelenght="all")
-#     CP_data_processed = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=True, threshold=180,
-#                                         wavelenght="all")
-#     #low wavelengths
-#     V2_data_processed_low = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
-#                                         wavelenght="low")
-#     CP_data_processed_low = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
-#                                         wavelenght="low")
-#     #medium wavelengths
-#     V2_data_processed_medium = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
-#                                         wavelenght="medium")
-#     CP_data_processed_medium = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
-#                                         wavelenght="medium")
-#     #high wavelengths
-#     V2_data_processed_high = data_processing(object_name, "V2", celestial_object.data["V2"], visulalize=False, threshold=1,
-#                                         wavelenght="high")
-#     CP_data_processed_high = data_processing(object_name, "CP", celestial_object.data["CP"], visulalize=False, threshold=180,
-#                                         wavelenght="high")
-#
-#     celestial_object.post_processing_data = {"V2_all":V2_data_processed, "CP_all": CP_data_processed,
-#                                              "V2_low":V2_data_processed_low, "CP_low": CP_data_processed_low,
-#                                              "V2_medium":V2_data_processed_medium, "CP_medium": CP_data_processed_medium,
-#                                              "V2_high":V2_data_processed_high, "CP_high": CP_data_processed_high}
-#
-
-# # ###############
-# # ###V2 model####
-# # ###############
-# V2_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="V2_all", data_type="V2", num_clusters=7,plot=True)
-# V2_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="V2_low", data_type="V2", num_clusters=7)
-# V2_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="V2_medium", data_type="V2", num_clusters=7)
-# V2_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="V2_high", data_type="V2", num_clusters=7)
-#
-#
-#
-# plot_avarage_sequence(V2_cluster_centers,V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high,
-#                       legend=["all", "low", "medium", "high"],
-#                       plot_type="V2",
-#                       path=pdfdir + "V2_averages.pdf",
-#                       num_clusters=7)
-#
-# #Reset
-# V2_cluster_centers, V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high = None, None, None, None
-#
-# # ###############
-# # ###CP model####
-# # ###############
-# CP_cluster_centers = make_clusters(data_set_as_dict, wavelength_scale="CP_all", data_type="CP", num_clusters=7,plot=True)
-# CP_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="CP_low", data_type="CP", num_clusters=7)
-# CP_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="CP_medium", data_type="CP", num_clusters=7)
-# CP_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="CP_high", data_type="CP", num_clusters=7)
-#
-#
-#
-# plot_avarage_sequence(CP_cluster_centers,CP_cluster_centers_low, CP_cluster_centers_medium, CP_cluster_centers_high,
-#                       legend=["all", "low", "medium", "high"],
-#                       plot_type="CP",
-#                       path=pdfdir + "CP_averages.pdf",
-#                       num_clusters=7)
-# #Reset
-# CP_cluster_centers,CP_cluster_centers_low, CP_cluster_centers_medium, CP_cluster_centers_high = None, None, None, None
-#
-# # ###################
-# # ###KNN on files####
-# # ###################
-# # #KNN on V2 values
-# # knn_classification(file_names,data_set_as_dict)
-# #
-# # #KNN on CP values
-# # knn_classification(file_names,data_set_as_dict,wavelength_scale="CP_all", meassurements_type="CP")
-#
-# #Calculate sum of squared disatances for each wavelenght
-# V2_dtw_low = make_dtw_distance_table(data_set_as_dict, ("V2_low", "V2"))
-# V2_dtw_medium = make_dtw_distance_table(data_set_as_dict, ("V2_medium", "V2"))
-# V2_dtw_high = make_dtw_distance_table(data_set_as_dict, ("V2_high", "V2"))
-#
-# V2_dtw_total = V2_dtw_low + V2_dtw_medium.values + V2_dtw_high.values
-#
-# # print("{0}\n{1}\n{2}\n{3}\n".format(V2_dtw_low,V2_dtw_medium, V2_dtw_high, V2_dtw_total))
-# closest_neighbor = V2_dtw_total.idxmin(axis=1)
-# print(closest_neighbor)
-#
-#
-# #Calculate sum of squared disatances for each wavelenght based on CP
-# print("===============CP====================")
-#
-# CP_dtw_low = make_dtw_distance_table(data_set_as_dict, ("CP_low", "CP"))
-# CP_dtw_medium = make_dtw_distance_table(data_set_as_dict, ("CP_medium", "CP"))
-# CP_dtw_high = make_dtw_distance_table(data_set_as_dict, ("CP_high", "CP"))
-#
-# CP_dtw_total = CP_dtw_low + CP_dtw_medium.values + CP_dtw_high.values
-#
-# # print("{0}\n{1}\n{2}\n{3}\n".format(CP_dtw_low,CP_dtw_medium, CP_dtw_high, CP_dtw_total))
-# closest_neighbor = CP_dtw_total.idxmin(axis=1)
-# print(closest_neighbor)
-#
-# #check if any pattern is observed if distance is calculated from 0,0
-# V2_dtw0_low = make_dtw_distance_0(data_set_as_dict, ("V2_low", "V2"))
-# V2_dtw0_medium = make_dtw_distance_0(data_set_as_dict, ("V2_medium", "V2"))
-# V2_dtw0_high = make_dtw_distance_0(data_set_as_dict, ("V2_high", "V2"))
-# V2_dtw0_total = V2_dtw0_low + V2_dtw0_medium + V2_dtw0_high
-#
-# CP_dtw0_low = make_dtw_distance_0(data_set_as_dict, ("CP_low", "CP"),CP=True)
-# CP_dtw0_medium = make_dtw_distance_0(data_set_as_dict, ("CP_medium", "CP"),CP=True)
-# CP_dtw0_high = make_dtw_distance_0(data_set_as_dict, ("CP_high", "CP"),CP=True)
-# CP_dtw0_total = CP_dtw0_low + CP_dtw0_medium + CP_dtw0_high
-#
-# plt.subplot(1,1,1)
-# plt.scatter(V2_dtw0_total,CP_dtw0_total)
-# legend = V2_dtw0_total.index.tolist()
-# for i,txt in enumerate(legend):
-#     plt.annotate(txt,(V2_dtw0_total.iloc[i,0],CP_dtw0_total.iloc[i,0]))
-# plt.savefig("./distance.pdf", dpi=100)
-#
-# # #check if any pattern is observed if distance is calculated from 0,0
-# # for cname, cvalues in data_set_as_dict.items():
-# #     var = cvalues.post_processing_data["V2_all"]["V2"]
-#
-#
-#
 # # moving files
 for pdf in os.listdir(fitsdir):
     if pdf.endswith("pdf"):
