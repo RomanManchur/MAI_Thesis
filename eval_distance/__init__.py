@@ -1,5 +1,4 @@
-from eval_distance.DTWDistance import DTWDistance
-from eval_distance.DTWDistance import DTWMatrix
+from eval_distance.DTWDistance import DTWDistance, DTWcompound, DTWMatrix
 from eval_distance.DTW_distance_table import make_dtw_distance_table
 from eval_distance.DTW_pcenter import make_dtw_distance_0
-
+from eval_distance.DTW_pcenter import get_coordinates, make_cluster_distances

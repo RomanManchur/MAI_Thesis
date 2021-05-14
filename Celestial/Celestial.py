@@ -25,6 +25,8 @@ class Celestial:
         self.data = data
         self.object_type = object_type
         self.post_processing_data = post_processing_data
+        #this attribute defines object co-oridtate in 2D space after distance transformation
+        self.coordinates = (0,0)
 
     def update_data(self, new_data):
         """"Combines measurements taken for the same object in different days to single dataset

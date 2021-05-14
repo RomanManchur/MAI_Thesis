@@ -1,10 +1,11 @@
-'''This library contains all fuctions related to knn calculation logic'''
+'''This library contains all functions related to knn calculation logic'''
 
 import pandas as pd
 import numpy as np
 import random
 from sklearn.metrics import classification_report
 from eval_distance import DTWDistance
+from eval_distance import DTWcompound as get_compound_dtw
 
 def generate_data_sets(file_names, split_ratio=0.8):
     '''Perfroms random split on input dataset to produce training and test set
@@ -28,34 +29,6 @@ def generate_data_sets(file_names, split_ratio=0.8):
             train_ref.extend(v[:index])
             test_ref.extend(v[index:])
     return (train_ref, test_ref)
-
-
-def get_compound_dtw(query, reference, window):
-    ''' Function to compute complex distance between objects on basis of DTW distances per wavelengths of V2 and CP
-
-    :param query:
-        Celestial object from test set
-    :param reference:
-        Celestial object from reference set
-    :param window: size of wrapping window
-    :return: <float>
-        composed distance as Eucledian distance between V2 (component per wavelengths) and CP (component per wavelength)
-
-    '''
-
-    #Calculate DTW distance between query and reference objects for each wavelenght on basis of V2 attribute
-    V2_dtw_low = DTWDistance(query.post_processing_data['V2_low']['V2'],reference.post_processing_data['V2_low']['V2'], window)
-    V2_dtw_medium = DTWDistance(query.post_processing_data['V2_medium']['V2'], reference.post_processing_data['V2_medium']['V2'], window)
-    V2_dtw_high= DTWDistance(query.post_processing_data['V2_high']['V2'], reference.post_processing_data['V2_high']['V2'], window)
-
-    # Calculate DTW distance between query and reference objects for each wavelenght on basis of CP attribute
-    CP_dtw_low = DTWDistance(query.post_processing_data['CP_low']['CP'], reference.post_processing_data['CP_low']['CP'], window)
-    CP_dtw_medium = DTWDistance(query.post_processing_data['CP_medium']['CP'], reference.post_processing_data['CP_medium']['CP'], window)
-    CP_dtw_high = DTWDistance(query.post_processing_data['CP_high']['CP'], reference.post_processing_data['CP_high']['CP'], window)
-
-    #return compose distance: sum of each distance for filtered attribute and get Eucledian distance based on sums
-    return ((V2_dtw_low + V2_dtw_medium + V2_dtw_high)**2 + (CP_dtw_low + CP_dtw_medium + CP_dtw_high)**2)**0.5
-
 
 
 def get_nn(query, train_ref, data_set_as_dict, w, n_count=1, composed_distance = False, scale = 'V2_all',attribute='V2'):
@@ -151,7 +124,7 @@ def knn_classification(train_ref, test_ref , data_set_as_dict, split_ratio=0.8, 
 
 
 
-def get_closest_neighbors(ds1, window, nn, ds2=None):
+def get_closest_neighbors(ds1, window, nn, ds2=None, out=None):
     ''' Returns closest neighbors between elements of input dataset(s)
 
     :param ds1: <dict>
@@ -173,35 +146,45 @@ def get_closest_neighbors(ds1, window, nn, ds2=None):
             keys: closest neighbor(s) name
             values: distance
     '''
-    nearest_neighbors = {}
 
-    if not ds2:
-        test_ds = ds1
-    else:
-        test_ds = ds2
+    if out is None:
+        out = "nn_small_results.txt"
 
-    for names_i, values_i in test_ds.items():
-        #At each iteration of outer loop create temporary dictionary structure of fixed length
-        #that will hold information about closest neighbors and respective distance to them.
-        tmp_dict = {x:(None,np.inf) for x in range(nn)}
-        for names_j, values_j in ds1.items():
-            if names_i != names_j:
-                #compute compound distance between object pairs
-                current_distance = get_compound_dtw(values_i, values_j, window)
-                #check within temporary dictionary structure if current distance is less than stored maximum
-                #if yes -> remove maximum element from dictionary and update with current distance
-                #otherwise -> continue
-                max_distance = 0
-                #getting max distance from temp dictionary and associated key
-                for k,v in tmp_dict.items():
-                    if v[1] > max_distance:
-                        max_distance = v[1]
-                        max_element = k
-                #update after checking all elements in case current distance is lower than maximum stored in tmd_dict
-                if current_distance < max_distance:
-                    del tmp_dict[max_element]
-                    tmp_dict[names_j] = (values_j.object_type,current_distance)
-                c=0
-        nearest_neighbors[names_i] = tmp_dict
+    with open(out, 'w') as nn_results:
 
-    return nearest_neighbors
+        #nearest_neighbors = {}
+
+        if not ds2:
+            test_ds = ds1
+        else:
+            test_ds = ds2
+
+        nn_results.write('{')
+        c=0
+        for names_i, values_i in test_ds.items():
+            #At each iteration of outer loop create temporary dictionary structure of fixed length
+            #that will hold information about closest neighbors and respective distance to them.
+            tmp_dict = {x:(None,np.inf) for x in range(nn)}
+            for names_j, values_j in ds1.items():
+                if names_i != names_j:
+                    #compute compound distance between object pairs
+                    current_distance = get_compound_dtw(values_i, values_j, window)
+                    #check within temporary dictionary structure if current distance is less than stored maximum
+                    #if yes -> remove maximum element from dictionary and update with current distance
+                    #otherwise -> continue
+                    max_distance = 0
+                    #getting max distance from temp dictionary and associated key
+                    for k,v in tmp_dict.items():
+                        if v[1] > max_distance:
+                            max_distance = v[1]
+                            max_element = k
+                    #update after checking all elements in case current distance is lower than maximum stored in tmd_dict
+                    if current_distance < max_distance:
+                        del tmp_dict[max_element]
+                        tmp_dict[names_j] = (values_j.object_type,current_distance)
+            c+=1
+            print("#", c , "Computed NN for ", names_i)
+            nn_results.write("'" + names_i + "'" + ':' + str(tmp_dict) + ',')
+            #nearest_neighbors[names_i] = tmp_dict
+        nn_results.write('}')
+        return None
