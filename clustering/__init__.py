@@ -1,1 +1,2 @@
 from clustering.hierarchical import agglomerative_clusters, make_condense_matrix
+from clustering.dtw_clusters import make_dtw_clusters

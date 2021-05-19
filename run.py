@@ -11,12 +11,15 @@ from collections import defaultdict
 from file_preprocessing.data_processing import data_processing
 from knn.knn_modules import generate_data_sets, get_closest_neighbors
 from clustering.hierarchical import agglomerative_clusters, make_condense_matrix
+from clustering.dtw_clusters import make_dtw_clusters
 from knn.knn_modules import knn_classification
 from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.cluster import KMeans
 from matplotlib import pyplot as plt
 import numpy as np
 import sys
+
+
 
 args = sys.argv
 mode = None
@@ -26,7 +29,7 @@ max_window_size = None
 #Below variables control K-nn calculation
 dtw_window_size, nearest_neighbors = None, 3
 #Below variable specifies distane matrix
-coordinates_file = "coordinates.csv" # CSV file to read / write coordinates of dataset in 2D space
+csvfile = None # CSV file to read / write coordinates of dataset in 2D space
 #Below variable defines cluster type: k-means or hierarchical
 cluster_type = None
 #Below defines linkage type in case of hierarchical clusters
@@ -38,6 +41,7 @@ vizualize_data = False
 pdfdir, csvdir, out = None, None, None
 saved = False # controls if distance matrix is read from file (False) or saved to specified file(True)
 
+meassurement_type, wavelength = None, None
 # Specifying the location of the data file
 # dir = "/Users/rmanchur/Documents/MAI_Thesis/data/"
 # fitsdir = dir + "all_data/all_sets/"
@@ -58,7 +62,7 @@ arg_index = 1
 print(args)
 
 while arg_index < len(args):
-    if args[arg_index] == '-mode':
+    if args[arg_index] == '-mode': # expected values: [benchmarking, knn, clustering]
         mode = args[arg_index+1]
 
     elif args[arg_index] == '-dir': #directory with project files
@@ -88,14 +92,20 @@ while arg_index < len(args):
     elif args[arg_index] == '-nearest_neighbors':  # controls max number of nearest neighbors to track
         nearest_neighbors = args[arg_index + 1]
 
-    elif args[arg_index] == '-cluster_type':  # defines cluster method to use: either hierarchical or k-means
+    elif args[arg_index] == '-cluster_type':  # expected types: [hierarchical, k-means, dtw]
         cluster_type = args[arg_index + 1]
 
     elif args[arg_index] == '-linkage_type':  # defines linkage type in hierarchical clustering
         linkage_type = args[arg_index + 1]
 
-    elif args[arg_index] == '-num_clusters':  # controls number of clusters for K-means
+    elif args[arg_index] == '-num_clusters':  # controls number of clusters for K-means and DBA k-means (DTW)
         num_clusters = args[arg_index + 1]
+
+    elif args[arg_index] == '-meassurement_type':  # Defines measurement type used in DBA k-means (DTW) either V2 or CP
+        meassurement_type = args[arg_index + 1]
+
+    elif args[arg_index] == '-wavelength':  # Defines wavelength type used in DBA k-means (DTW), supported values [all, low, medium, high]
+        wavelength = args[arg_index + 1]
 
     elif args[arg_index] == '-vizualize_data':  # bolean parameter that defines if to plot data during pre-processing
         vizualize_data = str(args[arg_index + 1])
@@ -103,8 +113,8 @@ while arg_index < len(args):
     elif args[arg_index] == '-out':  # specify location to store results
         out = args[arg_index + 1] # specifies path to store the data
 
-    elif args[arg_index] == '-coordinates_file':  # if passed distance matrix is read from file instead of recalc
-        coordinates_file = args[arg_index + 1]
+    elif args[arg_index] == '-csv_file':  # path to csv file with pre-processed data to full avoid recalculation on dataset
+        csvfile = args[arg_index + 1]
 
     elif args[arg_index] == '-saved':
         saved = args[arg_index + 1] #if False reads distM from file, else saves to file
@@ -115,15 +125,23 @@ while arg_index < len(args):
 
 # Check for mandatory parameters; Exit if any mandatory is missing
 err = False
+#In case of full processing we need to specify path to project directory, directory with DB files and target list file
 if len(dir) == 0:
     print('Mandatory parameter "-dir" is missing. Please provide path to project directory...')
     err = True
-if len(fitsdir) == 0:
+if len(fitsdir) == 0 and not saved:
     print('Mandatory parameter "-fitsdir" is missing. Please provide path to database files...')
     err = True
-if len(targets) == 0:
+if len(targets) == 0 and not saved:
     print('Mandatory parameter "-targets" is missing. Please provide path to a file with target data...')
     err = True
+
+#In case processing is run using stored data, then CSV file needs to be provided
+if csvfile is None:
+    print('Mandatory parameter "-csv_file" is missing. Provide the file to read/write pre-processed data')
+    err = True
+
+#Mode is madatory parameter that defines what analysis will be run on dataset
 if mode and mode == 'benchmarking':
     benchmarking = True
 elif mode and mode == 'knn':
@@ -134,11 +152,16 @@ else:
     print('Got unsupported mode {0}. Expected modes of operation are: benchmarking | knn | clustering'.format(mode))
     err = True
 
-if mode == 'clustering' and (cluster_type is None or cluster_type not in ['hierarchical', 'k-means']):
+#In case mode is clustering, cluster type needs to be provided.
+if mode == 'clustering' and (cluster_type is None or cluster_type not in ['hierarchical', 'k-means', 'dtw']):
     print('Mandatory parameter "-cluster_type" is missing. In case running in clustering mode, then type of cluster needs'
           'to be provided.')
     err = True
 
+#In case mode is DBA k-means, both measurement_type and wavelengths parameters need to be provided
+if cluster_type == 'dtw' and (meassurement_type is None or wavelength is None) and not saved:
+    print('BDA mode of operation mandatory parameter "-meassurement_type" or -wavelength missing.')
+    err = True
 
 if err:
     print("Expected usage:....")
@@ -163,12 +186,13 @@ if err:
     print("3.2 K-means clusters")
     print(
         "./run -mode clustering -cluster_type <k-means> -num_clusters <k> -dtw_window_size <size> -dir <project_path>  -fitsdir <path_to_IOFS> -targets <file_with_targets>")
-
+    print("3.3 DTW clusters")
+    print(
+        "./run -mode clustering -cluster_type <dtw> -num_clusters <k> -dtw_window_size <size> -dir <project_path>  -fitsdir <path_to_IOFS> -targets <file_with_targets>")
     print("Optional parameters: \n"
           "[-pdfdir] - specifies path to store measurements and pre-processing plots (only relevant if vizualize_data is True)\n"
-          "[-out] - specifies path to file where results are stored (default: )\n"
           "[-vizualize_data] - boolean (default False), defines if data needs to be plotted or not\n"
-          "[-coordinates_file] - if passed reads distance matrix from file, instead of recomputing\n"
+          "[-csv_file] - if passed reads distance matrix from file, instead of recomputing\n"
           "[-saved] - if true, saves distance matrix to specified file; otherwise reads from it (default: False)"
           )
     sys.exit(1)
@@ -181,7 +205,7 @@ if dtw_window_size is None:
     dtw_window_size = 20
 if cluster_type == 'hierarchical' and linkage_type is None:
     linkage_type  = 'complete'
-if cluster_type == 'k-means' and num_clusters is None:
+if (cluster_type == 'k-means' or cluster_type == 'dtw') and num_clusters is None:
     num_clusters = 7
 if pdfdir is None:
     pdfdir = dir + "pdf/"
@@ -199,14 +223,13 @@ def default_value():
     return set()
 file_names = defaultdict(default_value)
 
-
 # cleaning up
-for pdf in os.listdir(fitsdir):
-    if pdf.endswith("pdf"):
-        os.remove(fitsdir + "/" + pdf)
+# for pdf in os.listdir(fitsdir):
+#     if pdf.endswith("pdf"):
+#         os.remove(fitsdir + "/" + pdf)
 
 
-
+#Main program
 if not saved:
     ##################################################################
     #                   Get object list from file                    #
@@ -396,33 +419,32 @@ if knn:
     except ValueError:
         print("Wrong parameter {0} can not be converted to integer".format(nearest_neighbors))
     print(data_set_as_dict)
-    print(get_closest_neighbors(ds1=data_set_as_dict, window=window, nn=nearest_neighbors,out=csvdir+out))
+    get_closest_neighbors(ds1=data_set_as_dict, window=window, nn=nearest_neighbors,out=csvdir+out)
+    print("{0}-nn completed succesfully.\n Results are stored to {1}".format(str(nearest_neighbors),csvdir+out))
 
 
 # Section clusters
-if clustering:
+if clustering and not cluster_type == 'dtw':
     try:
         window = int(dtw_window_size)
     except ValueError:
         print("Wrong parameter {0} can not be converted to integer".format(dtw_window_size))
 
-
     if not saved:
         #Calculate co-orditanates of object in 2D space: x-axis composite distance for V2; y-axis - composite distance for CP
         coordinates_matrix = get_coordinates(dataset=data_set_as_dict, window=window)
-        coordinates_matrix.to_csv(csvdir+coordinates_file)
-        print("Coordinates matrix calculated successfully and stored to {0}{1}".format(csvdir, coordinates_file))
+        coordinates_matrix.to_csv(csvdir+csvfile)
+        print("Coordinates matrix calculated successfully and stored to {0}{1}".format(csvdir, csvfile))
     else:
         #Load coordinates from file
-        coordinates_matrix = pd.read_csv(csvdir+coordinates_file, index_col=0)
+        coordinates_matrix = pd.read_csv(csvdir+csvfile, index_col=0)
 
     # Calculate clusters
-    # Make distance matrix between pairs
-    distance_martix = make_cluster_distances(coordinates_matrix)
-    # Run agglomerative clustering on distance matrix ==> returns text representation of clustering logic and distances
-
+    # Hierarchical clustering with compound distance
     if cluster_type == 'hierarchical':
-        print(agglomerative_clusters(distance_martix,linkage_type))
+        # Make distance matrix between pairs
+        distance_martix = make_cluster_distances(coordinates_matrix)
+        # print(agglomerative_clusters(distance_martix,linkage_type))
         # Use standard packages to make dendogram
         # 1. Create condenced distance matrix
         dist_condenced = make_condense_matrix(distance_martix)
@@ -431,14 +453,27 @@ if clustering:
         # 3. Plot
         plt.figure()
         labels = np.asarray(list(distance_martix.columns))
+        # dendrogram(Z, orientation='left', labels=labels, truncate_mode='level', p=7)
         dendrogram(Z, orientation='left', labels=labels)
         f = plt.gcf()
         f.set_size_inches(15, 10)
         plt.savefig(pdfdir+'hierarchical.pdf', dpi=100)
+        print("Built dendrogram successfully. Results are stored to {0}".format(pdfdir+"hierarchical.pdf"))
+        sys.exit(0)
 
-    else:
+#K-means with compound distance
+    elif cluster_type == 'k-means':
         # Use K-means
-        kmeans = KMeans(n_clusters= 7)
+        try:
+            num_clusters = int(num_clusters)
+            if num_clusters <=0:
+                print("Number of clusters has to be positive integer, got {0} instead".format(num_clusters))
+                sys.exit(1)
+        except ValueError:
+            print("Number of clusters has to be positive integer, got {0} instead".format(num_clusters))
+            sys.exit(1)
+
+        kmeans = KMeans(n_clusters= num_clusters)
         # Get data required for K-means clustering
         # names, coordinates = [], []
         # for k, v in data_set_as_dict.items():
@@ -449,14 +484,13 @@ if clustering:
         # Show original distribution of points in 2D space
         plt.figure()
         plt.scatter(coordinates_matrix.loc[:,'x'],coordinates_matrix.loc[:,'y'])
-        for id, name in enumerate(coordinates_matrix.index):
-            plt.annotate(name, (coordinates_matrix.iloc[id,0], coordinates_matrix.iloc[id,1]))
+        # for id, name in enumerate(coordinates_matrix.index):
+        #     plt.annotate(name, (coordinates_matrix.iloc[id,0], coordinates_matrix.iloc[id,1]))
         plt.xlabel("DTW(V2)")
         plt.ylabel("DTW(CP)")
         f = plt.gcf()
         f.set_size_inches(15, 10)
         plt.savefig(pdfdir+'data2D.pdf', dpi=100)
-
 
         # Apply clustering
         labels = kmeans.fit_predict(coordinates_matrix)
@@ -469,12 +503,70 @@ if clustering:
         for i in uniq_lables:
             plt.scatter(coordinates_matrix.loc[labels == i,'x'], coordinates_matrix.loc[labels == i,'y'], label=i)
         plt.scatter(centroids[:,0] , centroids[:,1] , s = 80, color = 'k')
+
+        # # Uncomment below section to plot labeled points on the same plot with unlabled
+        # coordinates_matrix_ = pd.read_csv(csvdir + 'coordinates.csv', index_col=0)
+        # plt.scatter(coordinates_matrix_.loc[:, 'x'], coordinates_matrix_.loc[:, 'y'], color = 'g')
+        # for id_, name_ in enumerate(coordinates_matrix_.index):
+        #     plt.annotate(name_, (coordinates_matrix_.iloc[id_,0], coordinates_matrix_.iloc[id_,1]))
+
         plt.legend()
         f = plt.gcf()
         f.set_size_inches(15, 10)
         plt.savefig(pdfdir+'kmeans.pdf', dpi=100)
+        print("K-means with k={0} completed successfully. Results are saved to {1}".format(num_clusters,pdfdir+'kmeans.pdf'))
+        sys.exit(0)
 
 
+# DBA k-means clustering section
+if clustering and cluster_type == 'dtw':
+    ################ #############
+    ###DTW V2 clustering model####
+    ################ #############
+    print("Buildng BDA k-means model for attribute {0} and wavelength {1}".format(meassurement_type, wavelength))
+    if not saved:
+        measurements = []
+        for celestial_object in data_set_as_dict.values():
+            ts = celestial_object.post_processing_data[meassurement_type+"_"+wavelength][meassurement_type]
+            measurements.append(ts)
+        measurements = pd.DataFrame(measurements, index=list(data_set_as_dict.keys()))
+        measurements.to_csv(csvdir+csvfile)
+    else:
+        # Load coordinates from file
+        measurements = pd.read_csv(csvdir + csvfile, index_col=0)
+    #Run DBA k-means
+    try:
+        num_clusters = int(num_clusters)
+        if num_clusters <= 0:
+            print("Number of clusters has to be positive integer, got {0} instead".format(num_clusters))
+            sys.exit(1)
+    except ValueError:
+        print("Number of clusters has to be positive integer, got {0} instead".format(num_clusters))
+        sys.exit(1)
+    V2_cluster_centers_ = make_dtw_clusters(measurements, num_clusters=num_clusters, path_to_pdf=pdfdir + out + '.pdf')
+
+    print("DBA k-means with k={0}, completed succesfully".format(num_clusters))
+    # V2_cluster_centers_low = make_dtw_clusters(data_set_as_dict, wavelength_scale="V2_low", data_type="V2", num_clusters=7)
+    # V2_cluster_centers_medium = make_dtw_clusters(data_set_as_dict, wavelength_scale="V2_medium", data_type="V2", num_clusters=7)
+    # V2_cluster_centers_high = make_dtw_clusters(data_set_as_dict, wavelength_scale="V2_high", data_type="V2", num_clusters=7)
+    #
+    #
+    #
+    # plot_avarage_sequence(V2_cluster_centers,V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high,
+    #                       legend=["all", "low", "medium", "high"],
+    #                       plot_type="V2",
+    #                       path=pdfdir + "V2_averages.pdf",
+    #                       num_clusters=7)
+
+    #Reset
+    # V2_cluster_centers, V2_cluster_centers_low, V2_cluster_centers_medium, V2_cluster_centers_high = None, None, None, None
+    #
+    # # ###############
+    # # ###CP model####
+    # # ###############
+    # CP_cluster_centers_low = make_clusters(data_set_as_dict, wavelength_scale="CP_low", data_type="CP", num_clusters=7)
+    # CP_cluster_centers_medium = make_clusters(data_set_as_dict, wavelength_scale="CP_medium", data_type="CP", num_clusters=7)
+    # CP_cluster_centers_high = make_clusters(data_set_as_dict, wavelength_scale="CP_high", data_type="CP", num_clusters=7)
 
 
 
@@ -511,9 +603,6 @@ if clustering:
 # # print("{0}\n{1}\n{2}\n{3}\n".format(CP_dtw_low,CP_dtw_medium, CP_dtw_high, CP_dtw_total))
 # closest_neighbor = CP_dtw_total.idxmin(axis=1)
 # print(closest_neighbor)
-
-
-
 
 
 #
